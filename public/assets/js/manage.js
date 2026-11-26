@@ -73,23 +73,25 @@ function renderMessage(icon, title, text, retry = false) {
 }
 
 async function renderLogin() {
-  const logo = h("div", { class: "hero-logo", style: { margin: "0 auto" } }, "🔐");
-  const title = h("h1", { style: { "font-size": "20px", margin: "8px 0 0" }, text: "لوحة تحكم المتجر" });
-  const pin = h("input", { class: "input center", type: "password", inputmode: "numeric", autocomplete: "current-password",
-    maxlength: "8", placeholder: "• • • •", "aria-label": "رمز PIN", style: { "font-size": "24px", "letter-spacing": "8px" } });
+  const chip = h("div", { class: "store-chip" }, h("span", { class: "ph" }, "🏪"), h("b", { text: "لوحة تحكم المتجر" }));
+  const pin = h("input", { class: "input pin-input", type: "password", inputmode: "numeric", autocomplete: "current-password",
+    maxlength: "8", placeholder: "••••", "aria-label": "رمز PIN" });
   const err = h("div", { class: "error-text center", role: "alert" });
-  const btn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "submit" }, "دخول");
-  const form = h("form", { class: "card stack", style: { "max-width": "380px", width: "100%" } },
-    logo, title, h("p", { class: "muted center", style: { margin: "0" }, text: "أدخل رمز PIN الخاص بمتجرك" }), pin, err, btn);
-  fill(root, h("div", { class: "state-screen" }, form));
+  const btn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "submit" }, "تسجيل الدخول");
+  const form = h("form", { class: "auth-card" },
+    chip, h("h2", { text: "أدخل رمز الدخول (PIN)" }),
+    h("div", { class: "icon-input" }, h("span", { class: "i", "aria-hidden": "true" }, "🔒"), pin), err, btn,
+    h("p", { class: "hint center", style: { margin: "0" }, text: "نسيت الرمز؟ تواصل مع الإدارة لإعادة تعيينه." }));
+  fill(root, h("div", { class: "auth" },
+    h("div", { class: "auth-hero" }, h("img", { class: "art", src: "/assets/img/login-merchant.svg", alt: "" }),
+      h("h1", { text: "أهلاً بك 👋" }), h("p", { text: "أدر متجرك وطلباتك من جوالك بكل سهولة" })),
+    form));
   pin.focus();
 
   rpc(sb, "get_store_public", { p_slug: slug }).then((d) => {
     if (d?.store) {
       applyTheme(d.store);
-      title.textContent = d.store.name;
-      if (d.store.logo_url) logo.replaceWith(h("img", { class: "hero-logo", src: d.store.logo_url, alt: "", style: { margin: "0 auto" } }));
-      else logo.textContent = initials(d.store.name);
+      fill(chip, d.store.logo_url ? h("img", { src: d.store.logo_url, alt: "" }) : h("span", { class: "ph" }, initials(d.store.name)), h("b", { text: d.store.name }));
     }
   }).catch(() => {});
 
@@ -132,14 +134,22 @@ function renderShell() {
   const mode = MODES[s.business_mode];
   TABS[0].label = mode.items === "الأصناف" ? "المنيو" : mode.items;
   TABS[0].icon = mode.icon;
+  const tabTitle = { menu: TABS[0].label, settings: "إعدادات المتجر", design: "التصميم والهوية", offers: "العروض والبنرات" }[tab];
 
-  const header = h("header", { class: "app-header" }, h("div", { class: "container" },
-    s.logo_url ? h("img", { class: "logo-sm", src: s.logo_url, alt: "" }) : h("div", { class: "logo-sm" }, initials(s.name)),
-    h("div", { class: "grow" }, h("h1", { text: s.name }), h("div", { class: "hint", text: `وضع التشغيل: ${mode.label}` })),
-    h("a", { class: "btn btn-soft btn-sm", href: `/?store=${slug}`, target: "_blank", rel: "noopener" }, "عرض المتجر ↗"),
-    h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-label": "تسجيل الخروج", onClick: logout }, "خروج")));
+  const header = h("header", { class: "p-header" },
+    h("div", { class: "p-top" },
+      s.logo_url ? h("img", { class: "p-logo", src: s.logo_url, alt: "" }) : h("div", { class: "p-logo" }, initials(s.name)),
+      h("div", { class: "p-title" }, h("h1", { text: s.name }), h("div", { class: "sub", text: `${mode.icon} ${mode.label} • ${tabTitle}` })),
+      h("a", { class: "hbtn", href: `/?store=${slug}`, target: "_blank", rel: "noopener", "aria-label": "عرض المتجر", title: "عرض المتجر" }, "👁️"),
+      h("button", { class: "hbtn", type: "button", "aria-label": "تسجيل الخروج", title: "خروج", onClick: logout }, "🚪")));
 
-  const content = h("div", { class: "container dash-pad stack", id: "tab-content" });
+  const t = D.stats.today, m = D.stats.last_30d;
+  const stats = h("div", { class: "p-stats" },
+    h("div", { class: "p-stat" }, h("span", { class: "i" }, "👀"), h("b", { text: String(t.views) }), h("span", {}, "زيارات اليوم")),
+    h("div", { class: "p-stat" }, h("span", { class: "i" }, "🧾"), h("b", { text: String(t.orders) }), h("span", {}, "طلبات اليوم")),
+    h("div", { class: "p-stat" }, h("span", { class: "i" }, "💰"), h("b", { text: money(m.revenue) }), h("span", {}, `${m.orders} طلب / 30 يوم`)));
+
+  const content = h("div", { class: "p-body", id: "tab-content" });
   const days = daysLeft(s.expires_at);
   if (!s.is_live) {
     content.append(h("div", { class: "alert alert-danger" }, "⏸️ ",
@@ -147,21 +157,15 @@ function renderShell() {
   } else if (days <= 7) {
     content.append(h("div", { class: "alert alert-info" }, `⏳ ينتهي الاشتراك خلال ${days} يوم — تواصل مع الإدارة للتجديد.`));
   }
-  const t = D.stats.today, m = D.stats.last_30d;
-  content.append(h("div", { class: "stats" },
-    h("div", { class: "stat" }, h("b", { text: String(t.views) }), h("span", {}, "زيارات اليوم")),
-    h("div", { class: "stat" }, h("b", { text: String(t.orders) }), h("span", {}, "طلبات اليوم")),
-    h("div", { class: "stat" }, h("b", { text: String(m.orders) }), h("span", {}, "طلبات 30 يوم"))));
-
   const panel = h("section", { class: "stack", id: "panel" });
   content.append(panel);
 
-  const nav = h("nav", { class: "bottom-nav", "aria-label": "أقسام اللوحة" }, TABS.map((x) =>
+  const nav = h("nav", { class: "bottom-nav p-nav", "aria-label": "أقسام اللوحة" }, TABS.map((x) =>
     h("button", { type: "button", class: x.id === tab ? "active" : "", "aria-current": x.id === tab ? "page" : null,
       onClick: () => { tab = x.id; ls.set("manage_tab", tab, true); renderShell(); window.scrollTo(0, 0); } },
       h("span", { class: "i", "aria-hidden": "true" }, x.icon), x.label)));
 
-  fill(root, header, content, nav);
+  fill(root, header, stats, content, nav);
   ({ menu: tabMenu, settings: tabSettings, design: tabDesign, offers: tabOffers })[tab](panel);
 }
 
@@ -259,35 +263,51 @@ function tabMenu(panel) {
   const mode = MODES[s.business_mode];
   const products = D.products;
 
-  const actions = h("div", { class: "row wrap" },
-    h("button", { class: "btn btn-primary grow", type: "button", onClick: () => productForm(null) }, `➕ إضافة ${mode.item}`));
+  root.append(h("button", { class: "fab", type: "button", "aria-label": `إضافة ${mode.item}`, onClick: () => productForm(null) },
+    h("span", { class: "plus", "aria-hidden": "true" }, "+"), `إضافة ${mode.item}`));
+
   if (s.business_mode === "order") {
-    actions.append(h("button", { class: "btn btn-soft grow", type: "button", onClick: visionImport },
-      `📷 منيو من صورة (${D.vision_left}/5)`));
+    panel.append(h("button", { class: "promo-card", type: "button", onClick: visionImport },
+      h("span", { class: "i", "aria-hidden": "true" }, "📷"),
+      h("span", {}, h("b", {}, "أضف منيو من صورة"), h("small", {}, "صوّر المنيو الورقي ونستخرج الأصناف والأسعار تلقائياً")),
+      h("span", { class: "go" }, `${D.vision_left}/5 ←`)));
   }
-  panel.append(actions);
 
   if (!products.length) {
-    panel.append(h("div", { class: "card center muted" }, `لا توجد ${mode.items} بعد. ابدأ بإضافة أول ${mode.item}.`));
+    panel.append(h("div", { class: "card empty-state" }, h("img", { src: "/assets/img/empty.svg", alt: "" }),
+      h("b", { text: `لا توجد ${mode.items} بعد` }), h("span", { class: "muted small", text: `ابدأ بإضافة أول ${mode.item} من الزر بالأسفل` })));
     return;
   }
 
+  let filter = ls.get("manage_filter", "all", true) || "all";
+  const counts = { all: products.length, on: products.filter((p) => p.is_available).length };
+  counts.off = counts.all - counts.on;
+  const seg = h("div", { class: "seg-tabs", role: "tablist" });
+  const drawSeg = () => fill(seg, ...[["all", "الكل"], ["on", "المتوفر"], ["off", "غير المتوفر"]].map(([k, l]) =>
+    h("button", { type: "button", class: filter === k ? "active" : "", onClick: () => { filter = k; ls.set("manage_filter", k, true); drawSeg(); draw(); } },
+      l, h("span", { class: "n" }, String(counts[k])))));
+  drawSeg();
+
   const search = input({ type: "search", placeholder: `بحث في ${mode.items}...`, "aria-label": "بحث" });
   const listWrap = h("div", { class: "stack" });
-  if (products.length > 8) panel.append(search);
+  panel.append(seg);
+  if (products.length > 8) panel.append(h("div", { class: "search-box" }, h("span", { class: "i", "aria-hidden": "true" }, "🔍"), search));
   panel.append(listWrap);
 
   const draw = () => {
     const q = oneLine(search.value, 40);
     const groups = new Map();
     for (const p of products) {
+      if (filter === "on" && !p.is_available) continue;
+      if (filter === "off" && p.is_available) continue;
       if (q && !p.name.includes(q) && !(p.category || "").includes(q)) continue;
       const k = p.category || mode.items;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(p);
     }
-    fill(listWrap, ...[...groups.entries()].map(([cat, items]) => h("div", { class: "stack", style: { gap: "8px" } },
-      h("div", { class: "row between" }, h("b", { text: cat }), h("span", { class: "hint", text: `${items.length}` })),
+    if (!groups.size) return fill(listWrap, h("div", { class: "card center muted" }, "لا توجد عناصر في هذا التصنيف"));
+    fill(listWrap, ...[...groups.entries()].map(([cat, items]) => h("div", { class: "stack", style: { gap: "10px" } },
+      h("div", { class: "sec-title" }, h("b", { text: cat }), h("span", { text: `${items.length} ${mode.item}` })),
       ...items.map(itemRow))));
   };
   search.addEventListener("input", draw);
@@ -296,7 +316,7 @@ function tabMenu(panel) {
 
 function itemRow(p) {
   const hasSizes = (p.options_json?.sizes || []).length > 0;
-  const row = h("div", { class: `item-row${p.is_available ? "" : " off"}` });
+  const row = h("div", { class: `pcard item-row${p.is_available ? "" : " off"}` });
   const priceInp = input({ class: "input price-input", type: "number", inputmode: "decimal", min: "0", step: "0.01",
     value: String(num(p.price)), "aria-label": `سعر ${p.name}` });
   priceInp.addEventListener("change", async () => {
@@ -307,28 +327,36 @@ function itemRow(p) {
       p.price = r.price;
     } catch { priceInp.value = String(num(p.price)); }
   });
+  const stateLbl = h("span", { text: p.is_available ? "ظاهر" : "مخفي" });
   const sw = switchEl(p.is_available, async (checked, inp) => {
     try {
       await save("merchant_quick_update", { p_id: p.id, p_is_available: checked, p_price: null }, checked ? "أصبح ظاهراً للعملاء ✅" : "تم الإخفاء من المتجر");
       p.is_available = checked;
       row.classList.toggle("off", !checked);
+      stateLbl.textContent = checked ? "ظاهر" : "مخفي";
     } catch { inp.checked = !checked; }
   }, `إظهار ${p.name}`);
 
-  const del = h("button", { class: "btn btn-ghost icon-btn", type: "button", "aria-label": "حذف", onClick: async () => {
+  const del = h("button", { class: "rbtn danger", type: "button", "aria-label": "حذف", onClick: async () => {
     if (!(await confirmDialog(`حذف «${p.name}» نهائياً؟`, { okText: "حذف", danger: true }))) return;
     try { await save("merchant_delete_product", { p_id: p.id }, "تم الحذف"); await loadDash(); } catch { /* handled */ }
   } }, "🗑️");
   const minSize = hasSizes ? Math.min(...p.options_json.sizes.map((x) => num(x.price))) : 0;
+  const meta = [];
+  if (p.category) meta.push(h("span", {}, "📂 ", p.category));
+  if (hasSizes) meta.push(h("span", {}, "📏 ", `${p.options_json.sizes.length} أحجام`));
+  if ((p.options_json?.addons || []).length) meta.push(h("span", {}, "➕ ", `${p.options_json.addons.length} إضافات`));
+
   row.append(
-    p.image_url ? h("img", { src: p.image_url, alt: "", loading: "lazy" }) : h("div", { class: "ph", "aria-hidden": "true" }, "🍽️"),
-    h("div", { class: "grow" },
-      h("div", { class: "name", text: p.name }),
-      h("div", { class: "row item-controls" },
-        hasSizes ? h("span", { class: "hint grow", text: `${p.options_json.sizes.length} أحجام • من ${money(minSize)}` }) : priceInp,
-        h("button", { class: "btn btn-ghost icon-btn", type: "button", "aria-label": "تعديل", onClick: () => productForm(p) }, "✏️"),
-        del)),
-    sw.el);
+    h("div", { class: "pc-media" }, p.image_url ? h("img", { src: p.image_url, alt: "", loading: "lazy" }) : "🍽️"),
+    h("div", { class: "pc-info" },
+      h("div", { class: "pc-name", text: p.name }),
+      meta.length ? h("div", { class: "pc-meta" }, meta) : null,
+      h("div", { class: "pc-foot" },
+        h("div", { class: "pc-price" }, hasSizes ? h("span", { text: `من ${money(minSize)}` }) : [priceInp, h("span", { class: "small" }, "ر.س")]),
+        h("label", { class: "pc-toggle" }, stateLbl, sw.el))),
+    h("div", { class: "pc-actions" },
+      h("button", { class: "rbtn", type: "button", "aria-label": "تعديل", onClick: () => productForm(p) }, "✏️"), del));
   return row;
 }
 

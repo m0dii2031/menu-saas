@@ -36,16 +36,19 @@ async function logout() {
 }
 
 function renderLogin() {
-  const email = h("input", { class: "input", type: "email", autocomplete: "username", dir: "ltr", required: true });
-  const pass = h("input", { class: "input", type: "password", autocomplete: "current-password", dir: "ltr", required: true });
-  const err = h("div", { class: "error-text", role: "alert" });
-  const btn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "submit" }, "دخول");
-  const form = h("form", { class: "card stack", style: { "max-width": "380px", width: "100%" } },
-    h("div", { class: "ico center", style: { "font-size": "40px" } }, "🛡️"),
-    h("h1", { class: "center", style: { "font-size": "20px", margin: "0" } }, "الإدارة العامة"),
-    h("label", { class: "field" }, h("span", {}, "البريد الإلكتروني"), email),
-    h("label", { class: "field" }, h("span", {}, "كلمة المرور"), pass), err, btn);
-  fill(root, h("div", { class: "state-screen" }, form));
+  const email = h("input", { class: "input", type: "email", autocomplete: "username", dir: "ltr", required: true, placeholder: "admin@example.com", "aria-label": "البريد الإلكتروني" });
+  const pass = h("input", { class: "input", type: "password", autocomplete: "current-password", dir: "ltr", required: true, placeholder: "••••••••", "aria-label": "كلمة المرور" });
+  const err = h("div", { class: "error-text center", role: "alert" });
+  const btn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "submit" }, "تسجيل الدخول");
+  const form = h("form", { class: "auth-card" },
+    h("h2", { text: "دخول المدير العام" }),
+    h("label", { class: "field" }, h("span", {}, "البريد الإلكتروني"), h("div", { class: "icon-input" }, h("span", { class: "i", "aria-hidden": "true" }, "✉️"), email)),
+    h("label", { class: "field" }, h("span", {}, "كلمة المرور"), h("div", { class: "icon-input" }, h("span", { class: "i", "aria-hidden": "true" }, "🔒"), pass)),
+    err, btn);
+  fill(root, h("div", { class: "auth" },
+    h("div", { class: "auth-hero" }, h("img", { class: "art", src: "/assets/img/login-admin.svg", alt: "" }),
+      h("h1", { text: "لوحة الإدارة" }), h("p", { text: "تابع كل المتاجر والاشتراكات من مكان واحد" })),
+    form));
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     btn.disabled = true; err.textContent = "";
@@ -88,24 +91,23 @@ function render() {
     views += num(s.stats_30d?.views); orders += num(s.stats_30d?.orders); revenue += num(s.stats_30d?.revenue);
   }
 
-  const header = h("header", { class: "app-header" }, h("div", { class: "container" },
-    h("div", { class: "logo-sm" }, "🛡️"),
-    h("div", { class: "grow" }, h("h1", { text: "الإدارة العامة" }), h("div", { class: "hint", text: `${total} متجر` })),
-    h("button", { class: "btn btn-primary btn-sm", type: "button", onClick: createStoreSheet }, "+ متجر جديد"),
-    h("button", { class: "btn btn-ghost btn-sm", type: "button", onClick: logout }, "خروج")));
+  const header = h("header", { class: "p-header" },
+    h("div", { class: "p-top" },
+      h("div", { class: "p-logo" }, "🛡️"),
+      h("div", { class: "p-title" }, h("h1", { text: "لوحة الإدارة" }), h("div", { class: "sub", text: `${total} متجر • ${counts.active + counts.soon} نشط` })),
+      h("button", { class: "hbtn", type: "button", "aria-label": "تحديث", title: "تحديث", onClick: reload }, "↻"),
+      h("button", { class: "hbtn", type: "button", "aria-label": "تسجيل الخروج", title: "خروج", onClick: logout }, "🚪")),
+    h("div", { class: "p-greet", text: `آخر 30 يوم: ${views} زيارة • ${orders} طلب • ${money(revenue)}` }));
 
-  const summary = h("div", { class: "stats" },
-    h("div", { class: "stat" }, h("b", { text: String(counts.active + counts.soon) }), h("span", {}, "متجر نشط")),
-    h("div", { class: "stat" }, h("b", { text: String(counts.soon) }), h("span", {}, "ينتهي خلال 7 أيام")),
-    h("div", { class: "stat" }, h("b", { text: String(counts.expired + counts.stopped) }), h("span", {}, "منتهي / موقوف")),
-    h("div", { class: "stat" }, h("b", { text: String(views) }), h("span", {}, "زيارات 30 يوم")),
-    h("div", { class: "stat" }, h("b", { text: String(orders) }), h("span", {}, "طلبات 30 يوم")),
-    h("div", { class: "stat" }, h("b", { text: money(revenue) }), h("span", {}, "قيمة الطلبات")));
+  const summary = h("div", { class: "p-stats" },
+    h("div", { class: "p-stat" }, h("span", { class: "i" }, "🟢"), h("b", { text: String(counts.active + counts.soon) }), h("span", {}, "متجر نشط")),
+    h("div", { class: "p-stat" }, h("span", { class: "i" }, "⏳"), h("b", { text: String(counts.soon) }), h("span", {}, "ينتهي خلال 7 أيام")),
+    h("div", { class: "p-stat" }, h("span", { class: "i" }, "⛔"), h("b", { text: String(counts.expired + counts.stopped) }), h("span", {}, "منتهي / موقوف")));
 
-  const chips = h("div", { class: "chips", role: "tablist" }, [
-    ["all", "الكل"], ["active", "نشط"], ["soon", "ينتهي قريباً"], ["expired", "منتهي"], ["stopped", "موقوف"],
-  ].map(([k, l]) => h("button", { type: "button", class: `chip${filter === k ? " active" : ""}`,
-    onClick: () => { filter = k; ls.set("admin_filter", k, true); render(); } }, l)));
+  const tabs = h("div", { class: "status-tabs", role: "tablist" }, [
+    ["all", "الكل", total], ["active", "نشط", counts.active], ["soon", "ينتهي قريباً", counts.soon], ["expired", "منتهي", counts.expired], ["stopped", "موقوف", counts.stopped],
+  ].map(([k, l, n]) => h("button", { type: "button", class: filter === k ? "active" : "",
+    onClick: () => { filter = k; ls.set("admin_filter", k, true); render(); } }, `${l} (${n})`)));
 
   const search = h("input", { class: "input", type: "search", placeholder: "بحث بالاسم أو الرابط أو الجوال...", value: query, "aria-label": "بحث" });
   const list = h("div", { class: "stack" });
@@ -114,12 +116,14 @@ function render() {
     query = search.value;
     const rows = stores.filter((s) => (filter === "all" || statusOf(s).key === filter)
       && (!q || s.name.toLowerCase().includes(q) || s.slug.includes(q) || s.whatsapp_phone.includes(q)));
-    fill(list, ...(rows.length ? rows.map(storeCard) : [h("div", { class: "card center muted" }, "لا توجد متاجر")]));
+    fill(list, ...(rows.length ? rows.map(storeCard) : [h("div", { class: "card empty-state" }, h("img", { src: "/assets/img/empty.svg", alt: "" }), h("b", {}, "لا توجد متاجر هنا"))]));
   };
   search.addEventListener("input", draw);
   draw();
 
-  fill(root, header, h("main", { class: "container stack", style: { padding: "16px 16px 40px" } }, summary, chips, search, list));
+  fill(root, header, summary,
+    h("main", { class: "p-body" }, tabs, h("div", { class: "search-box" }, h("span", { class: "i", "aria-hidden": "true" }, "🔍"), search), list),
+    h("button", { class: "fab", type: "button", onClick: createStoreSheet }, h("span", { class: "plus", "aria-hidden": "true" }, "+"), "متجر جديد"));
 }
 
 function storeCard(s) {
@@ -145,7 +149,7 @@ function storeCard(s) {
     await reload();
   });
 
-  const enter = h("button", { class: "btn btn-sm", type: "button" }, "🔧 دخول لوحة التاجر");
+  const enter = h("button", { class: "btn btn-blue btn-sm", type: "button" }, "🔧 دخول لوحة التاجر");
   enter.onclick = busy(enter, async () => {
     const w = window.open("about:blank", "_blank");
     const t = await rpc(sb, "admin_open_merchant", { p_store_id: s.id });
@@ -153,28 +157,33 @@ function storeCard(s) {
     if (w) { w.opener = null; w.location.href = url; } else location.href = url;
   });
 
-  const remind = h("button", { class: "btn btn-sm", type: "button", onClick: () => copyText(reminderText(s), "تم نسخ رسالة التذكير ✅") }, "📋 نسخ رسالة التذكير");
+  const remind = h("button", { class: "btn btn-gold btn-sm", type: "button", onClick: () => copyText(reminderText(s), "تم نسخ رسالة التذكير ✅") }, "📋 نسخ رسالة التذكير");
 
-  return h("article", { class: "card store-card" },
-    h("div", { class: "row" },
-      s.logo_url ? h("img", { class: "logo-sm", src: s.logo_url, alt: "", style: { width: "44px", height: "44px", "border-radius": "50%", "object-fit": "cover" } })
-                 : h("div", { class: "logo-sm", style: { background: theme.primary, color: "#fff", width: "44px", height: "44px", "border-radius": "50%", display: "grid", "place-items": "center" } }, s.name.charAt(0)),
-      h("div", { class: "grow" },
-        h("b", { text: s.name }),
-        h("div", { class: "hint ltr", text: `/?store=${s.slug}` })),
+  // شريط المدة المتبقية من الاشتراك (نسبة إلى 30 يوماً)
+  const d = Math.max(0, daysLeft(s.expires_at));
+  const pct = Math.min(100, Math.round((d / 30) * 100));
+  const date = new Date(s.expires_at).toLocaleDateString("ar-u-ca-gregory-nu-latn", { dateStyle: "medium" });
+
+  return h("article", { class: "card scard store-card" },
+    h("div", { class: "s-head" },
+      s.logo_url ? h("img", { class: "s-logo", src: s.logo_url, alt: "" })
+                 : h("div", { class: "s-logo", style: { background: theme.primary } }, s.name.charAt(0)),
+      h("div", { class: "grow", style: { "min-width": "0" } },
+        h("b", { text: s.name, style: { display: "block", "font-size": "16px" } }),
+        h("div", { class: "hint", text: `${MODES[s.business_mode]?.icon || ""} ${MODES[s.business_mode]?.label || s.business_mode} • ${theme.label}` })),
       h("span", { class: `badge ${st.cls}` }, st.label)),
-    h("div", { class: "row wrap" },
-      h("span", { class: "badge" }, `${MODES[s.business_mode]?.icon || ""} ${MODES[s.business_mode]?.label || s.business_mode}`),
-      h("span", { class: "badge badge-muted" }, theme.label),
-      h("span", { class: "badge badge-muted ltr" }, `+${s.whatsapp_phone}`)),
-    h("div", { class: "stats" },
-      h("div", { class: "stat" }, h("b", { text: String(s.stats_30d?.views ?? 0) }), h("span", {}, "زيارات 30ي")),
-      h("div", { class: "stat" }, h("b", { text: String(s.stats_30d?.orders ?? 0) }), h("span", {}, "طلبات 30ي")),
-      h("div", { class: "stat" }, h("b", { text: money(s.stats_30d?.revenue ?? 0) }), h("span", {}, "القيمة"))),
-    h("div", { class: "hint", text: `ينتهي: ${new Date(s.expires_at).toLocaleDateString("ar-u-ca-gregory-nu-latn", { dateStyle: "medium" })} • إجمالي الطلبات: ${s.stats_all?.orders ?? 0}` }),
+    h("div", { class: "s-lines" },
+      h("div", {}, h("span", { class: "k" }, "🔗 الرابط"), h("a", { href: `/?store=${s.slug}`, target: "_blank", rel: "noopener", text: `/?store=${s.slug}` })),
+      h("div", {}, h("span", { class: "k" }, "📱 واتساب"), h("span", { class: "ltr", text: `+${s.whatsapp_phone}` })),
+      h("div", {}, h("span", { class: "k" }, "📅 ينتهي"), h("span", { text: `${date} • إجمالي الطلبات ${s.stats_all?.orders ?? 0}` }))),
+    h("div", { class: "exp-bar", "aria-label": `متبقي ${d} يوم` }, h("i", { class: d <= 0 || !s.is_active ? "bad" : d <= 7 ? "warn" : "", style: { width: `${Math.max(4, pct)}%` } })),
+    h("div", { class: "mini-stats" },
+      h("div", {}, h("b", { text: String(s.stats_30d?.views ?? 0) }), h("span", {}, "زيارات 30ي")),
+      h("div", {}, h("b", { text: String(s.stats_30d?.orders ?? 0) }), h("span", {}, "طلبات 30ي")),
+      h("div", {}, h("b", { text: money(s.stats_30d?.revenue ?? 0) }), h("span", {}, "القيمة"))),
     h("div", { class: "actions" }, renew, toggle, enter, remind,
-      h("button", { class: "btn btn-sm", type: "button", onClick: () => linksSheet(s) }, "🔗 الرابط و QR"),
-      h("button", { class: "btn btn-sm", type: "button", onClick: () => editSheet(s) }, "✏️ تعديل / PIN")));
+      h("button", { class: "btn btn-outline btn-sm", type: "button", onClick: () => linksSheet(s) }, "🔗 الرابط و QR"),
+      h("button", { class: "btn btn-outline btn-sm", type: "button", onClick: () => editSheet(s) }, "✏️ تعديل / PIN")));
 }
 
 function reminderText(s) {

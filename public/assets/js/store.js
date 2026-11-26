@@ -233,13 +233,23 @@ function render() {
         h("div", { class: "small", style: { "font-weight": "500" }, text: "تقدر تتصفح، وبيتاح الطلب أول ما نفتح." }))));
   }
 
-  const banner = renderBanner();
+  const groups = groupProducts();
+  const banner = renderBanner(groups);
   if (banner) page.append(banner);
   page.append(h("div", { id: "install-slot" }));
+
+  /* ترحيب */
+  const cname = oneLine(customer().name, 30);
+  const greet = { order: "وش ودك تطلب اليوم", booking: "وين ودك تقضي إجازتك", inquiry: "تدوّر على عقار يناسبك", charity: "ساهم معنا في الخير", legal: "كيف نقدر نخدمك" }[mode];
+  page.append(h("div", { class: "sf-greet" }, `${greet}${cname ? ` يا ${cname}` : ""}${mode === "charity" ? " 💚" : "؟"}`,
+    h("small", { text: mode === "order" ? "اختر من الأقسام وأرسل طلبك عبر واتساب بثواني" : "تصفح واختر، وطلبك يوصل مباشرة عبر واتساب" })));
+
+  /* أقسام دائرية */
+  if (groups.length > 1) page.append(...categoryCircles(groups));
+  if (mode === "order") { const ro = reorderCard(); if (ro) page.append(ro); }
   if (mode === "charity" && s.iban_number) page.append(ibanCard());
 
   /* بحث */
-  const groups = groupProducts();
   const search = h("input", { type: "search", placeholder: `ابحث في ${MODES[mode].items}...`, value: S.query, "aria-label": "بحث" });
   if (S.products.length > 5) page.append(h("div", { class: "sf-search" }, h("span", { class: "i", "aria-hidden": "true" }, "🔍"), search));
 
@@ -344,7 +354,7 @@ function groupProducts() {
 }
 
 /* ---------------- البنر والعداد التنازلي ---------------- */
-function renderBanner() {
+function renderBanner(groups = []) {
   const s = S.store;
   if (!s.banner_active || (!s.banner_text && !s.banner_image_url)) return null;
   const ends = s.banner_expires_at ? new Date(s.banner_expires_at).getTime() : null;
@@ -352,11 +362,19 @@ function renderBanner() {
 
   const hh = h("b"), mm = h("b"), ss = h("b");
   const cd = ends ? h("div", { class: "countdown", "aria-label": "الوقت المتبقي للعرض" }, hh, ":", mm, ":", ss) : null;
-  const el = h("section", { class: `sf-promo promo${s.banner_image_url ? " has-img" : ""}`, "aria-label": "عرض" },
+  const pct = /(\d{1,2})\s*[%٪]/.exec(toLatinDigits(s.banner_text || ""));
+  const goMenu = () => {
+    if (s.business_mode === "order" || !S.ctaEl?.querySelector("button")) document.getElementById(`cat-${groups[0]?.idx ?? 0}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else S.ctaEl.querySelector("button").click();
+  };
+  const el = h("section", { class: `sf-promo promo poster${s.banner_image_url ? " has-img" : ""}`, "aria-label": "عرض" },
     s.banner_image_url ? h("img", { src: s.banner_image_url, alt: s.banner_text || "عرض" }) : null,
-    (s.banner_text || cd) ? h("div", { class: "sf-promo-body" },
-      h("div", {}, h("span", { class: "tag" }, ends ? "⏳ عرض لفترة محدودة" : "🔥 عرض خاص"),
-        s.banner_text ? h("div", { class: "sf-promo-text", text: s.banner_text }) : null), cd) : null);
+    s.banner_image_url ? null : h("div", { class: "sticker", "aria-hidden": "true" }, pct ? ["خصم", h("b", {}, `${pct[1]}%`)] : ["🔥", h("b", {}, "عرض")]),
+    h("div", { class: "sf-promo-body" },
+      h("div", { class: "stack", style: { gap: "8px", "justify-items": "start" } },
+        h("span", { class: "tag" }, ends ? "⏳ لفترة محدودة" : "🔥 عرض خاص"),
+        s.banner_text ? h("div", { class: "sf-promo-text", text: s.banner_text }) : null,
+        h("div", { class: "promo-cta" }, h("button", { class: "btn btn-sm", type: "button", onClick: goMenu }, "اطلب الحين ←"), cd))));
 
   if (ends) {
     const tick = () => {
@@ -381,6 +399,46 @@ function ibanCard() {
     h("div", { class: "iban-box" },
       h("code", { text: iban.replace(/(.{4})/g, "$1 ").trim() }),
       h("button", { class: "btn btn-primary btn-sm", type: "button", onClick: () => copyText(iban, "تم نسخ الآيبان ✅") }, "نسخ")));
+}
+
+/* ---------------- الأقسام الدائرية ---------------- */
+const PASTELS = ["#fff1e6", "#e8f7ee", "#e8f1ff", "#fdeaf3", "#fff8d6", "#eceafd", "#e6f7f9", "#f3f4f6"];
+
+function catCircle(g, i, onPick) {
+  const img = g.items.map((p) => productImages(p)[0]).find(Boolean);
+  return h("button", { class: "cat-circle", type: "button", onClick: () => { onPick?.(); document.getElementById(`cat-${g.idx}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); } },
+    h("span", { class: "c", style: { background: PASTELS[i % PASTELS.length] } }, img ? h("img", { src: img, alt: "", loading: "lazy" }) : MODE_ICON[S.store.business_mode]),
+    h("span", { text: g.name }));
+}
+
+function categoryCircles(groups) {
+  const head = h("div", { class: "sf-cats-head" }, h("b", { text: "الأقسام" }),
+    groups.length > 4 ? h("button", { class: "link-btn", type: "button", onClick: () => {
+      const sh = openSheet({ title: "كل الأقسام", body: h("div", { class: "cat-grid" }, groups.map((g, i) => catCircle(g, i, () => sh.close()))) });
+    } }, "عرض الكل") : null);
+  return [head, h("div", { class: "sf-cats" }, groups.map((g, i) => catCircle(g, i)))];
+}
+
+/* ---------------- أعد طلبك المعتاد ---------------- */
+const lastKey = () => `last_order_${slug}`;
+
+function reorderCard() {
+  const last = ls.get(lastKey(), null);
+  if (!last || !Array.isArray(last.lines)) return null;
+  const lines = sanitizeCart(last.lines);
+  if (!lines.length) return null;
+  const total = lines.reduce((a, l) => a + lineUnit(l) * l.qty, 0);
+  return h("section", { class: "reorder", "aria-label": "إعادة الطلب" },
+    h("div", { class: "top" }, h("b", {}, "أعد طلبك المعتاد"), h("span", { class: "muted small", text: money(total) })),
+    h("div", { class: "lines" },
+      h("div", { class: "thumbs" }, lines.slice(0, 3).map((l) => l.img ? h("img", { src: l.img, alt: "" }) : h("span", { class: "ph" }, "🍽️"))),
+      h("div", { class: "txt" }, lines.slice(0, 2).map((l) => h("div", { text: `x${l.qty} ${l.name}${l.size ? ` (${l.size.name})` : ""}` })),
+        lines.length > 2 ? h("div", { text: `+ ${lines.length - 2} أصناف أخرى` }) : null),
+      h("button", { class: "btn btn-yellow btn-sm", type: "button", onClick: () => {
+        for (const l of lines) addToCart({ ...l });
+        toast("رجّعنا طلبك السابق للسلة ✅", "success");
+        openCheckout();
+      } }, "↻ إعادة الطلب")));
 }
 
 /* ---------------- بطاقات العناصر ---------------- */
@@ -786,7 +844,10 @@ function openCheckout() {
     const ok = await submitToWhatsApp(sendBtn, sub + fee, items, (no) => buildOrderMessage(no, {
       ...who, type: st.type, district: dist, address: addr, gps: st.gps, note, sub, fee, payLabel,
     }));
-    if (ok) { S.cart = []; saveCart(); refreshCta(); sheet.close(); }
+    if (ok) {
+      ls.set(lastKey(), { at: Date.now(), lines: S.cart.map((l) => ({ ...l })) });
+      S.cart = []; saveCart(); refreshCta(); sheet.close();
+    }
   });
 }
 
@@ -889,7 +950,7 @@ function showSent(url, no) {
   openSheet({
     title: "تم تجهيز طلبك ✅",
     body: h("div", { class: "stack center", style: { "justify-items": "center", padding: "8px 0" } },
-      h("div", { style: { width: "84px", height: "84px", "border-radius": "50%", background: "#dcfce7", color: "#15803d", display: "grid", "place-items": "center", "font-size": "40px", "font-weight": "800" }, "aria-hidden": "true" }, "✓"),
+      h("img", { src: "/assets/img/order-success.svg", alt: "", style: { width: "190px" } }),
       h("b", { style: { "font-size": "20px" }, text: `رقم الطلب #${no}` }),
       h("p", { class: "muted", style: { margin: "0" }, text: "فتحنا لك واتساب برسالة جاهزة. اضغط «إرسال» داخل واتساب لإتمام العملية." })),
     foot: h("a", { class: "btn btn-primary btn-lg btn-block", href: url, target: "_blank", rel: "noopener" }, "فتح واتساب مرة أخرى"),

@@ -176,11 +176,12 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   console.log("\n[Admin]");
   let page = await newPage(browser, errors);
   await page.goto(`${BASE}/admin`);
+  await page.locator(".auth-card").waitFor(); await shot(page, "00-admin-login");
   await page.fill('input[type="email"]', "admin@test.com");
   await page.fill('input[type="password"]', "secret");
   await page.click('button[type="submit"]');
-  await page.getByText("+ متجر جديد").waitFor();
-  await page.click("text=+ متجر جديد");
+  await page.locator(".fab").waitFor();
+  await page.click(".fab");
   const sheet = page.locator(".sheet");
   await sheet.locator("input").nth(0).fill("مطعم التجربة");
   await sheet.locator("input").nth(1).fill("Test Rest");
@@ -207,17 +208,18 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   console.log("\n[Merchant]");
   page = await newPage(browser, errors);
   await page.goto(`${BASE}/manage?store=test-rest`);
+  await page.locator(".auth-card .store-chip b").waitFor(); await page.waitForTimeout(300); await shot(page, "04a-merchant-login");
   await page.fill('input[type="password"]', "0000");
   await page.click('button[type="submit"]');
   await page.getByText("رمز غير صحيح").waitFor();
   check("wrong PIN rejected with remaining count", await page.getByText("المتبقي").isVisible());
   await page.fill('input[type="password"]', pinText);
   await page.click('button[type="submit"]');
-  await page.getByText("➕ إضافة صنف").waitFor();
+  await page.locator(".fab").waitFor();
   await shot(page, "04-merchant-menu-empty");
 
   // add product with sizes & addons + image (generated PNG)
-  await page.click("text=➕ إضافة صنف");
+  await page.click(".fab");
   const f = page.locator(".sheet");
   await f.locator("input").nth(0).fill("برجر لحم <img src=x onerror=alert(1)>");
   await f.locator("input").nth(1).fill("وجبات");
@@ -243,14 +245,14 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   check("product image_url stored", /^https:\/\/test\.supabase\.co\/storage/.test(prod.image_url || ""));
 
   // second simple product + toggle off
-  await page.click("text=➕ إضافة صنف");
+  await page.click(".fab");
   await f.locator("input").nth(0).fill("بطاطس");
   await f.locator("input").nth(1).fill("مقبلات");
   await f.locator('input[type="number"]').first().fill("9");
   await f.getByText("إضافة الصنف").click();
   await page.locator(".item-row").nth(1).waitFor();
   // vision import
-  const [ch2] = await Promise.all([page.waitForEvent("filechooser"), page.getByText("منيو من صورة").click()]);
+  const [ch2] = await Promise.all([page.waitForEvent("filechooser"), page.getByText("أضف منيو من صورة").click()]);
   await ch2.setFiles(pngPath);
   await page.getByText("تم استخراج 2 صنف").waitFor({ timeout: 15000 });
   await shot(page, "06-merchant-vision");
@@ -335,6 +337,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await page.locator(".sheet").waitFor();
   await page.locator(".sheet-foot .btn", { hasText: "اختر الحجم أولاً" }).click();
   check("size is mandatory before add", await page.getByText("الرجاء اختيار الحجم").isVisible() && await page.locator(".sheet").count() === 1);
+  await page.waitForTimeout(800);
   await page.locator(".option", { hasText: "دبل" }).click();
   await page.locator(".option", { hasText: "جبنة شيدر" }).click();
   await page.locator('.sheet .qty button[aria-label="زيادة"]').click();
@@ -342,6 +345,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   check("add button shows computed total (32+3)*2=70", (await page.locator(".sheet-foot .btn").innerText()).includes("70"));
   await page.locator(".sheet-foot .btn").click();
   await page.locator(".product", { hasText: "بطاطس" }).click();
+  await page.waitForTimeout(400);
   await page.locator(".sheet-foot .btn").click();
   await page.locator(".cta-bar .btn").click();
   await page.locator(".sheet").waitFor();
@@ -369,9 +373,12 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   check("order_click logged with total 91", Number(ev.order_total) === 91, JSON.stringify(ev.items_json));
   await shot(page, "14-store-sent");
   await page.locator(".sheet .btn-ghost").first().click();
+  await page.reload(); await page.locator(".reorder").waitFor(); await page.locator(".reorder").scrollIntoViewIfNeeded(); await shot(page, "14c-store-reorder");
+  check("reorder card shows last order", (await page.locator(".reorder").innerText()).includes("برجر"));
   check("cart cleared after send", await page.locator(".cta-bar .btn").count() === 0);
   // cooldown
   await page.locator(".product", { hasText: "بطاطس" }).click();
+  await page.waitForTimeout(400);
   await page.locator(".sheet-foot .btn").click();
   await page.locator(".cta-bar .btn").click();
   check("customer data auto-filled from localStorage", (await page.locator('.sheet label:has-text("الحي") input').inputValue()) === "النرجس");
