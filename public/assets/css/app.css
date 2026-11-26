@@ -2,6 +2,10 @@
    المنيو — نظام التصميم (Mobile-first, RTL)
    القوالب عبر CSS Variables؛ اللون المخصص يتجاوز --primary فقط
    ========================================================= */
+/* رمز الريال السعودي (U+20C1) — خط مفتوح المصدر OFL، يُستخدم لهذا الحرف فقط */
+@font-face { font-family: "SaudiRiyal"; src: url("/assets/fonts/saudi-riyal.woff2") format("woff2"); font-weight: 100 600; font-display: swap; unicode-range: U+20C1; }
+@font-face { font-family: "SaudiRiyal"; src: url("/assets/fonts/saudi-riyal-bold.woff2") format("woff2"); font-weight: 700 900; font-display: swap; unicode-range: U+20C1; }
+
 :root {
   --primary: #18181b;
   --accent: var(--primary);
@@ -17,7 +21,7 @@
   --warning: #d97706;
   --shadow: 0 1px 2px rgb(0 0 0 / .04), 0 6px 20px rgb(0 0 0 / .06);
   --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
-  --font: "Almarai", "Segoe UI", Tahoma, system-ui, sans-serif;
+  --font: "SaudiRiyal", "Almarai", "Segoe UI", Tahoma, system-ui, sans-serif;
   color-scheme: light;
 }
 
@@ -123,6 +127,8 @@ a { color: var(--primary); }
 .switch .slider::before { content: ""; position: absolute; width: 24px; height: 24px; top: 3px; right: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
 .switch input:checked + .slider { background: var(--success); }
 .switch input:checked + .slider::before { transform: translateX(-20px); }
+[dir="ltr"] .switch .slider::before { right: auto; left: 3px; }
+[dir="ltr"] .switch input:checked + .slider::before { transform: translateX(20px); }
 .switch input:focus-visible + .slider { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* ---------- بطاقات ---------- */
@@ -300,7 +306,7 @@ a { color: var(--primary); }
 .thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
 .thumbs .t { position: relative; }
 .thumbs img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; }
-.thumbs .x { position: absolute; top: -6px; left: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--danger); color: #fff; font-size: 13px; cursor: pointer; }
+.thumbs .x { position: absolute; top: -6px; inset-inline-end: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--danger); color: #fff; font-size: 13px; cursor: pointer; }
 
 .theme-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .theme-card { border: 2px solid var(--border); border-radius: 14px; padding: 10px; cursor: pointer; background: var(--card); text-align: start; }

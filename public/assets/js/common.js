@@ -61,6 +61,33 @@ export function fill(el, ...children) {
   return el;
 }
 
+/* ---------------- اللغة (عربي / English) ---------------- */
+export const I18N = { lang: "ar", dict: {} };
+
+/** يترجم النص العربي (المفتاح هو النص العربي نفسه) مع دعم المتغيرات {name} */
+export function t(ar, vars) {
+  let s = I18N.lang === "en" ? (I18N.dict[ar] ?? ar) : ar;
+  if (vars) s = s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? ""));
+  return s;
+}
+
+export function setLang(lang) {
+  I18N.lang = lang === "en" ? "en" : "ar";
+  document.documentElement.lang = I18N.lang;
+  document.documentElement.dir = I18N.lang === "en" ? "ltr" : "rtl";
+  try { localStorage.setItem("lang", I18N.lang); } catch { /* ignore */ }
+}
+
+export function initLang(dict) {
+  I18N.dict = dict || {};
+  let saved = null;
+  try { saved = localStorage.getItem("lang"); } catch { /* ignore */ }
+  const urlLang = new URLSearchParams(location.search).get("lang");
+  setLang(urlLang || saved || "ar");
+}
+
+export const isEn = () => I18N.lang === "en";
+
 /* ---------------- نصوص وأرقام ---------------- */
 export function toLatinDigits(s) {
   return String(s ?? "")
@@ -84,10 +111,20 @@ export function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function money(n) {
+function fmtAmount(n) {
   const v = Math.round(num(n) * 100) / 100;
   const s = Number.isInteger(v) ? String(v) : v.toFixed(2);
-  return `${s.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} ${CONFIG.CURRENCY}`;
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/** مبلغ للعرض في الواجهة برمز الريال الرسمي */
+export function money(n) {
+  return `${fmtAmount(n)}\u00A0${CONFIG.CURRENCY}`;
+}
+
+/** مبلغ نصي لرسائل واتساب والنسخ: "25 ريال" */
+export function moneyText(n) {
+  return `${fmtAmount(n)} ${CONFIG.CURRENCY_TEXT}`;
 }
 
 /** توحيد رقم الجوال لصيغة دولية بدون + (يدعم 05xxxxxxxx السعودية) */
@@ -140,7 +177,7 @@ export function toast(msg, type = "") {
 /* ---------------- النوافذ السفلية ---------------- */
 export function openSheet({ title, body, foot, onClose, label, className = "" }) {
   const prevFocus = document.activeElement;
-  const closeBtn = h("button", { class: "btn btn-ghost icon-btn", "aria-label": "إغلاق", type: "button" }, "✕");
+  const closeBtn = h("button", { class: "btn btn-ghost icon-btn", "aria-label": t("إغلاق"), type: "button" }, "✕");
   const sheet = h("div", { class: `sheet ${className}`.trim(), role: "dialog", "aria-modal": "true", "aria-label": label || title || "" },
     h("div", { class: "sheet-head" }, h("h3", { text: title || "" }), closeBtn),
     h("div", { class: "sheet-body" }, body),
@@ -167,13 +204,13 @@ export function openSheet({ title, body, foot, onClose, label, className = "" })
   return { close, sheet, body: sheet.querySelector(".sheet-body"), foot: sheet.querySelector(".sheet-foot") };
 }
 
-export function confirmDialog(message, { okText = "تأكيد", danger = false } = {}) {
+export function confirmDialog(message, { okText = t("تأكيد"), danger = false } = {}) {
   return new Promise((resolve) => {
     let answered = false;
     const ok = h("button", { class: `btn ${danger ? "btn-danger" : "btn-primary"} btn-block`, type: "button" }, okText);
-    const cancel = h("button", { class: "btn btn-block", type: "button" }, "إلغاء");
+    const cancel = h("button", { class: "btn btn-block", type: "button" }, t("إلغاء"));
     const s = openSheet({
-      title: "تأكيد", body: h("p", { text: message, style: { margin: "0" } }),
+      title: t("تأكيد"), body: h("p", { text: message, style: { margin: "0" } }),
       foot: [ok, cancel], onClose: () => { if (!answered) resolve(false); },
     });
     ok.onclick = () => { answered = true; s.close(); resolve(true); };
@@ -181,7 +218,7 @@ export function confirmDialog(message, { okText = "تأكيد", danger = false }
   });
 }
 
-export async function copyText(text, okMsg = "تم النسخ ✅") {
+export async function copyText(text, okMsg = t("تم النسخ ✅")) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -265,16 +302,23 @@ export function openState(s, now = new Date()) {
 export function fmtTime12(t) {
   if (!t) return "";
   const [hh, mm] = String(t).split(":").map(Number);
-  if (hh === 0 && mm === 0) return "12:00 منتصف الليل";
-  const suffix = hh < 12 ? "ص" : "م";
+  if (hh === 0 && mm === 0) return I18N.lang === "en" ? "12:00 AM" : "12:00 منتصف الليل";
+  const suffix = I18N.lang === "en" ? (hh < 12 ? "AM" : "PM") : (hh < 12 ? "ص" : "م");
   const h12 = hh % 12 === 0 ? 12 : hh % 12;
   return `${h12}:${String(mm).padStart(2, "0")} ${suffix}`;
+}
+
+/** تاريخ عربي دائماً (لرسائل واتساب الموجهة للتاجر) */
+export function fmtDateMsg(ymd) {
+  try {
+    return new Date(`${ymd}T12:00:00Z`).toLocaleDateString("ar-u-ca-gregory-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  } catch { return ymd; }
 }
 
 export function fmtDateAr(ymd) {
   try {
     const d = new Date(`${ymd}T12:00:00Z`);
-    return d.toLocaleDateString("ar-u-ca-gregory-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+    return d.toLocaleDateString(I18N.lang === "en" ? "en-GB" : "ar-u-ca-gregory-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
   } catch { return ymd; }
 }
 

@@ -2,7 +2,7 @@
 // لوحة الإدارة العامة (Super Admin) — Supabase Auth + private.admins
 // =========================================================
 import {
-  h, fill, toast, openSheet, confirmDialog, money, num, oneLine, store as ls, THEMES, MODES, themeById,
+  h, fill, toast, openSheet, confirmDialog, money, moneyText, num, oneLine, store as ls, THEMES, MODES, themeById,
   createSb, rpc, friendlyError, copyText, daysLeft, isValidPhone, normalizePhone, waLink,
 } from "./common.js";
 
@@ -199,7 +199,7 @@ function reminderText(s) {
     `📊 أداء متجركم خلال آخر 30 يوم:`,
     `👀 الزيارات: ${st.views ?? 0}`,
     `🧾 الطلبات: ${st.orders ?? 0}`,
-    `💰 قيمة الطلبات: ${money(st.revenue ?? 0)}`,
+    `💰 قيمة الطلبات: ${moneyText(st.revenue ?? 0)}`,
     ``,
     `🔗 رابط متجركم: ${storeUrl(s)}`,
     `للتجديد يسعدنا تواصلكم معنا. شكراً لثقتكم 🌟`,

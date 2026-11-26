@@ -4,10 +4,11 @@
 // =========================================================
 import { CONFIG } from "./config.js";
 import {
-  h, fill, $, toast, openSheet, copyText, money, num, oneLine, multiLine, isValidPhone, waLink,
+  h, fill, $, toast, openSheet, copyText, money, moneyText, fmtDateMsg, t, initLang, setLang, isEn, num, oneLine, multiLine, isValidPhone, waLink,
   initials, store as ls, applyTheme, openState, fmtTime12, fmtDateAr, tzParts, addDays, MODES,
   createSb, rpc, withTimeout, debounce, getStoreSlug, toLatinDigits,
 } from "./common.js";
+import { EN } from "./i18n.js";
 
 const slug = getStoreSlug();
 const root = document.getElementById("app");
@@ -31,7 +32,19 @@ const MODE_ICON = { order: "🍽️", booking: "🏡", inquiry: "🏢", charity:
 /* =========================================================
    التشغيل
    ========================================================= */
+initLang(EN);
 boot();
+
+/** زر تبديل اللغة (عربي ⇄ English) */
+function langBtn() {
+  return h("button", { class: "round-btn lang-btn", type: "button", "aria-label": isEn() ? "العربية" : "English",
+    onClick: () => {
+      setLang(isEn() ? "ar" : "en");
+      document.querySelectorAll(".sheet-backdrop").forEach((b) => b.remove());
+      document.body.style.removeProperty("overflow");
+      if (S.store) { setupHead(); render(); } else boot();
+    } }, isEn() ? "ع" : "EN");
+}
 
 async function boot() {
   if (!slug) return renderLanding();
@@ -39,7 +52,7 @@ async function boot() {
   try {
     await load(true);
   } catch {
-    return renderState("📡", "تعذر تحميل الصفحة", "تحقق من اتصالك بالإنترنت ثم أعد المحاولة.", true);
+    return renderState("📡", t("تعذر تحميل الصفحة"), t("تحقق من اتصالك بالإنترنت ثم أعد المحاولة."), true);
   }
   if (!S.store) return;
   logViewOnce();
@@ -54,7 +67,7 @@ async function load(first = false) {
   const data = await rpc(sb, "get_store_public", { p_slug: slug });
   if (data.status === "not_found") {
     S.store = null;
-    return renderState("🔍", "المتجر غير موجود", "تأكد من صحة الرابط.");
+    return renderState("🔍", t("المتجر غير موجود"), t("تأكد من صحة الرابط."));
   }
   if (data.status === "suspended") {
     S.store = null;
@@ -134,7 +147,7 @@ function renderState(icon, title, text, retry = false) {
       h("div", { class: "ico", "aria-hidden": "true" }, icon),
       h("h1", { text: title }),
       h("p", { class: "muted", text }),
-      retry ? h("button", { class: "btn btn-primary mt", onClick: () => location.reload() }, "إعادة المحاولة") : null)));
+      retry ? h("button", { class: "btn btn-primary mt", onClick: () => location.reload() }, t("إعادة المحاولة")) : null)));
 }
 
 function renderSuspended(s) {
@@ -144,24 +157,24 @@ function renderSuspended(s) {
                  : h("div", { class: "sf-logo", style: { margin: "0" } }, initials(s.name)),
       h("h1", { text: s.name, style: { margin: "4px 0 0" } }),
       h("div", { class: "ico", "aria-hidden": "true" }, "⏸️"),
-      h("p", { class: "muted", style: { margin: "0" }, text: "هذه الصفحة متوقفة مؤقتاً. نعتذر عن الإزعاج، وسنعود قريباً بإذن الله." }))));
+      h("p", { class: "muted", style: { margin: "0" }, text: t("هذه الصفحة متوقفة مؤقتاً. نعتذر عن الإزعاج، وسنعود قريباً بإذن الله.") }))));
 }
 
 function renderLanding() {
-  const inp = h("input", { class: "input ltr", placeholder: "store-name", "aria-label": "رابط المتجر", style: { "text-align": "left" } });
+  const inp = h("input", { class: "input ltr", placeholder: "store-name", "aria-label": t("رابط المتجر"), style: { "text-align": "left" } });
   const go = () => {
     const v = oneLine(inp.value, 40).toLowerCase();
     if (/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(v)) location.search = `?store=${v}`;
-    else toast("اكتب رابط المتجر بالأحرف الإنجليزية", "error");
+    else toast(t("اكتب رابط المتجر بالأحرف الإنجليزية"), "error");
   };
   inp.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
   fill(root, h("div", { class: "state-screen" },
     h("div", { class: "card stack", style: { "max-width": "420px", width: "100%" } },
       h("div", { class: "ico", "aria-hidden": "true" }, "🍽️"),
-      h("h1", { text: "منيو إلكتروني وبوابات طلب عبر واتساب" }),
-      h("p", { class: "muted", text: "افتح صفحة أي متجر عبر رابطه الخاص." }),
+      h("h1", { text: t("منيو إلكتروني وبوابات طلب عبر واتساب") }),
+      h("p", { class: "muted", text: t("افتح صفحة أي متجر عبر رابطه الخاص.") }),
       inp,
-      h("button", { class: "btn btn-primary btn-block", onClick: go }, "فتح المتجر"))));
+      h("button", { class: "btn btn-primary btn-block", onClick: go }, t("فتح المتجر")))));
 }
 
 /* =========================================================
@@ -183,7 +196,7 @@ async function shareStore() {
   try {
     if (navigator.share) return await navigator.share({ title: S.store.name, url });
   } catch { return; }
-  copyText(url, "تم نسخ رابط المتجر ✅");
+  copyText(url, t("تم نسخ رابط المتجر ✅"));
 }
 
 function render() {
@@ -194,26 +207,26 @@ function render() {
 
   /* شريط علوي مصغّر يظهر بعد تجاوز الغلاف */
   const topbar = h("header", { class: "sf-topbar", "aria-hidden": "true" },
-    logoEl(s, "ph"), h("b", { text: s.name }),
-    h("button", { class: "round-btn", type: "button", "aria-label": "مشاركة", onClick: shareStore }, "↗"));
+    logoEl(s, "ph"), h("b", { text: s.name }), langBtn(),
+    h("button", { class: "round-btn", type: "button", "aria-label": t("مشاركة"), onClick: shareStore }, "↗"));
 
   /* الغلاف */
   const cover = h("div", { class: "sf-cover" },
     s.cover_url ? h("img", { src: s.cover_url, alt: "" }) : h("div", { class: "pattern" }),
     h("div", { class: "sf-cover-actions" },
-      h("button", { class: "round-btn", type: "button", "aria-label": "مشاركة المتجر", onClick: shareStore }, "↗"),
-      h("span")));
+      h("button", { class: "round-btn", type: "button", "aria-label": t("مشاركة المتجر"), onClick: shareStore }, "↗"),
+      langBtn()));
 
   /* بطاقة المتجر */
   const info = [];
-  info.push(h("div", {}, h("span", { class: "k" }, "الحالة"),
-    h("span", { class: "v" }, h("i", { class: `dot ${st.open ? "on" : "off"}` }), st.open ? "مفتوح" : "مغلق")));
-  info.push(h("div", {}, h("span", { class: "k" }, "أوقات العمل"),
-    h("span", { class: "v", text: s.open_time && s.close_time && s.open_time !== s.close_time ? `${fmtTime12(s.open_time)} - ${fmtTime12(s.close_time)}` : "24 ساعة" })));
+  info.push(h("div", {}, h("span", { class: "k" }, t("الحالة")),
+    h("span", { class: "v" }, h("i", { class: `dot ${st.open ? "on" : "off"}` }), st.open ? t("مفتوح") : t("مغلق"))));
+  info.push(h("div", {}, h("span", { class: "k" }, t("أوقات العمل")),
+    h("span", { class: "v", text: s.open_time && s.close_time && s.open_time !== s.close_time ? `${fmtTime12(s.open_time)} - ${fmtTime12(s.close_time)}` : t("24 ساعة") })));
   if (mode === "order") {
-    info.push(h("div", {}, h("span", { class: "k" }, "التوصيل"), h("span", { class: "v", text: num(s.delivery_fee) > 0 ? money(s.delivery_fee) : "مجاني" })));
+    info.push(h("div", {}, h("span", { class: "k" }, t("التوصيل")), h("span", { class: "v", text: num(s.delivery_fee) > 0 ? money(s.delivery_fee) : t("مجاني") })));
   } else {
-    const label = { booking: "الوحدات", inquiry: "العروض", charity: "المبادرات", legal: "التخصصات" }[mode];
+    const label = { booking: t("الوحدات"), inquiry: t("العروض"), charity: t("المبادرات"), legal: t("التخصصات") }[mode];
     info.push(h("div", {}, h("span", { class: "k" }, label), h("span", { class: "v", text: String(S.products.filter((p) => p.is_available).length) })));
   }
 
@@ -229,8 +242,8 @@ function render() {
     page.append(h("div", { class: "sf-closed", role: "alert" },
       h("span", { class: "ico", "aria-hidden": "true" }, "🌙"),
       h("div", {},
-        h("div", { text: st.manual ? "مغلق الآن مؤقتاً" : `مغلق الآن — يفتح الساعة ${fmtTime12(st.opensAt)}` }),
-        h("div", { class: "small", style: { "font-weight": "500" }, text: "تقدر تتصفح، وبيتاح الطلب أول ما نفتح." }))));
+        h("div", { text: st.manual ? t("مغلق الآن مؤقتاً") : t("مغلق الآن — يفتح الساعة {t}", { t: fmtTime12(st.opensAt) }) }),
+        h("div", { class: "small", style: { "font-weight": "500" }, text: t("تقدر تتصفح، وبيتاح الطلب أول ما نفتح.") }))));
   }
 
   const groups = groupProducts();
@@ -240,9 +253,9 @@ function render() {
 
   /* ترحيب */
   const cname = oneLine(customer().name, 30);
-  const greet = { order: "وش ودك تطلب اليوم", booking: "وين ودك تقضي إجازتك", inquiry: "تدوّر على عقار يناسبك", charity: "ساهم معنا في الخير", legal: "كيف نقدر نخدمك" }[mode];
-  page.append(h("div", { class: "sf-greet" }, `${greet}${cname ? ` يا ${cname}` : ""}${mode === "charity" ? " 💚" : "؟"}`,
-    h("small", { text: mode === "order" ? "اختر من الأقسام وأرسل طلبك عبر واتساب بثواني" : "تصفح واختر، وطلبك يوصل مباشرة عبر واتساب" })));
+  const greet = { order: t("وش ودك تطلب اليوم"), booking: t("وين ودك تقضي إجازتك"), inquiry: t("تدوّر على عقار يناسبك"), charity: t("ساهم معنا في الخير"), legal: t("كيف نقدر نخدمك") }[mode];
+  page.append(h("div", { class: "sf-greet" }, cname ? t("{g} يا {n}؟", { g: t(greet), n: cname }) : `${t(greet)}${isEn() ? "?" : "؟"}`,
+    h("small", { text: mode === "order" ? t("اختر من الأقسام وأرسل طلبك عبر واتساب بثواني") : t("تصفح واختر، وطلبك يوصل مباشرة عبر واتساب") })));
 
   /* أقسام دائرية */
   if (groups.length > 1) page.append(...categoryCircles(groups));
@@ -250,13 +263,13 @@ function render() {
   if (mode === "charity" && s.iban_number) page.append(ibanCard());
 
   /* بحث */
-  const search = h("input", { type: "search", placeholder: `ابحث في ${MODES[mode].items}...`, value: S.query, "aria-label": "بحث" });
+  const search = h("input", { type: "search", placeholder: t("ابحث في {x}...", { x: t(MODES[mode].items) }), value: S.query, "aria-label": t("بحث") });
   if (S.products.length > 5) page.append(h("div", { class: "sf-search" }, h("span", { class: "i", "aria-hidden": "true" }, "🔍"), search));
 
   /* تبويبات الأقسام */
   let tabs = null;
   if (groups.length > 1) {
-    tabs = h("div", { class: "sf-tabs" }, h("nav", { "aria-label": "الأقسام" }, groups.map((g, i) =>
+    tabs = h("div", { class: "sf-tabs" }, h("nav", { "aria-label": t("الأقسام") }, groups.map((g, i) =>
       h("button", { class: `sf-tab${i === 0 ? " active" : ""}`, type: "button", dataset: { idx: String(g.idx) },
         onClick: () => document.getElementById(`cat-${g.idx}`)?.scrollIntoView({ behavior: "smooth", block: "start" }) }, g.name))));
     page.append(tabs);
@@ -269,7 +282,7 @@ function render() {
     const feat = S.products.filter((p) => p.is_available && productImages(p)[0]).slice(0, 8);
     if (feat.length >= 3) {
       page.append(h("section", { class: "featured-wrap" },
-        h("div", { class: "sf-sec" }, h("h2", { class: "sf-sec-title", text: "مختارات لك ✨" })),
+        h("div", { class: "sf-sec" }, h("h2", { class: "sf-sec-title", text: t("مختارات لك ✨") })),
         h("div", { class: "sf-featured" }, feat.map(featuredCard))));
     }
   }
@@ -283,8 +296,8 @@ function render() {
     sec._items = g.items;
     return sec;
   });
-  const noResults = h("div", { class: "sf-empty", hidden: true }, "لا توجد نتائج مطابقة 🔎");
-  if (!S.products.length) listWrap.append(h("div", { class: "sf-empty" }, `لا توجد ${MODES[mode].items} حالياً`));
+  const noResults = h("div", { class: "sf-empty", hidden: true }, t("لا توجد نتائج مطابقة 🔎"));
+  if (!S.products.length) listWrap.append(h("div", { class: "sf-empty" }, t("لا توجد {x} حالياً", { x: t(MODES[mode].items) })));
   listWrap.append(...sections, noResults);
   page.append(listWrap, h("div", { class: "sf-bottom-space" }));
 
@@ -346,7 +359,7 @@ function groupProducts() {
   const fallback = MODES[S.store.business_mode].items;
   const map = new Map();
   for (const p of S.products) {
-    const key = p.category || fallback;
+    const key = p.category || t(fallback);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(p);
   }
@@ -361,44 +374,44 @@ function renderBanner(groups = []) {
   if (ends && ends <= now().getTime()) return null;
 
   const hh = h("b"), mm = h("b"), ss = h("b");
-  const cd = ends ? h("div", { class: "countdown", "aria-label": "الوقت المتبقي للعرض" }, hh, ":", mm, ":", ss) : null;
+  const cd = ends ? h("div", { class: "countdown", "aria-label": t("الوقت المتبقي للعرض") }, hh, ":", mm, ":", ss) : null;
   const pct = /(\d{1,2})\s*[%٪]/.exec(toLatinDigits(s.banner_text || ""));
   const goMenu = () => {
     if (s.business_mode === "order" || !S.ctaEl?.querySelector("button")) document.getElementById(`cat-${groups[0]?.idx ?? 0}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     else S.ctaEl.querySelector("button").click();
   };
-  const el = h("section", { class: `sf-promo promo poster${s.banner_image_url ? " has-img" : ""}`, "aria-label": "عرض" },
+  const el = h("section", { class: `sf-promo promo poster${s.banner_image_url ? " has-img" : ""}`, "aria-label": t("عرض") },
     s.banner_image_url ? h("img", { src: s.banner_image_url, alt: s.banner_text || "عرض" }) : null,
-    s.banner_image_url ? null : h("div", { class: "sticker", "aria-hidden": "true" }, pct ? ["خصم", h("b", {}, `${pct[1]}%`)] : ["🔥", h("b", {}, "عرض")]),
+    s.banner_image_url ? null : h("div", { class: "sticker", "aria-hidden": "true" }, pct ? [t("خصم"), h("b", {}, `${pct[1]}%`)] : ["🔥", h("b", {}, t("عرض"))]),
     h("div", { class: "sf-promo-body" },
       h("div", { class: "stack", style: { gap: "8px", "justify-items": "start" } },
-        h("span", { class: "tag" }, ends ? "⏳ لفترة محدودة" : "🔥 عرض خاص"),
+        h("span", { class: "tag" }, ends ? t("⏳ لفترة محدودة") : t("🔥 عرض خاص")),
         s.banner_text ? h("div", { class: "sf-promo-text", text: s.banner_text }) : null,
-        h("div", { class: "promo-cta" }, h("button", { class: "btn btn-sm", type: "button", onClick: goMenu }, "اطلب الحين ←"), cd))));
+        h("div", { class: "promo-cta" }, h("button", { class: "btn btn-sm", type: "button", onClick: goMenu }, t("اطلب الحين ←")), cd))));
 
   if (ends) {
     const tick = () => {
       const left = Math.max(0, ends - now().getTime());
-      if (left <= 0) { el.remove(); clearInterval(t); return; }
+      if (left <= 0) { el.remove(); clearInterval(timer); return; }
       const sec = Math.floor(left / 1000);
       hh.textContent = String(Math.floor(sec / 3600)).padStart(2, "0");
       mm.textContent = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
       ss.textContent = String(sec % 60).padStart(2, "0");
     };
     tick();
-    const t = setInterval(tick, 1000);
-    S.timers.push(t);
+    const timer = setInterval(tick, 1000);
+    S.timers.push(timer);
   }
   return el;
 }
 
 function ibanCard() {
   const iban = S.store.iban_number;
-  return h("section", { class: "sf-iban", "aria-label": "الحساب البنكي" },
-    h("div", { class: "t" }, h("span", { "aria-hidden": "true" }, "🏦"), "الآيبان الرسمي للتبرع"),
+  return h("section", { class: "sf-iban", "aria-label": t("الحساب البنكي") },
+    h("div", { class: "t" }, h("span", { "aria-hidden": "true" }, "🏦"), t("الآيبان الرسمي للتبرع")),
     h("div", { class: "iban-box" },
       h("code", { text: iban.replace(/(.{4})/g, "$1 ").trim() }),
-      h("button", { class: "btn btn-primary btn-sm", type: "button", onClick: () => copyText(iban, "تم نسخ الآيبان ✅") }, "نسخ")));
+      h("button", { class: "btn btn-primary btn-sm", type: "button", onClick: () => copyText(iban, t("تم نسخ الآيبان ✅")) }, t("نسخ"))));
 }
 
 /* ---------------- الأقسام الدائرية ---------------- */
@@ -412,10 +425,10 @@ function catCircle(g, i, onPick) {
 }
 
 function categoryCircles(groups) {
-  const head = h("div", { class: "sf-cats-head" }, h("b", { text: "الأقسام" }),
+  const head = h("div", { class: "sf-cats-head" }, h("b", { text: t("الأقسام") }),
     groups.length > 4 ? h("button", { class: "link-btn", type: "button", onClick: () => {
-      const sh = openSheet({ title: "كل الأقسام", body: h("div", { class: "cat-grid" }, groups.map((g, i) => catCircle(g, i, () => sh.close()))) });
-    } }, "عرض الكل") : null);
+      const sh = openSheet({ title: t("كل الأقسام"), body: h("div", { class: "cat-grid" }, groups.map((g, i) => catCircle(g, i, () => sh.close()))) });
+    } }, t("عرض الكل")) : null);
   return [head, h("div", { class: "sf-cats" }, groups.map((g, i) => catCircle(g, i)))];
 }
 
@@ -428,17 +441,17 @@ function reorderCard() {
   const lines = sanitizeCart(last.lines);
   if (!lines.length) return null;
   const total = lines.reduce((a, l) => a + lineUnit(l) * l.qty, 0);
-  return h("section", { class: "reorder", "aria-label": "إعادة الطلب" },
-    h("div", { class: "top" }, h("b", {}, "أعد طلبك المعتاد"), h("span", { class: "muted small", text: money(total) })),
+  return h("section", { class: "reorder", "aria-label": t("إعادة الطلب") },
+    h("div", { class: "top" }, h("b", {}, t("أعد طلبك المعتاد")), h("span", { class: "muted small", text: money(total) })),
     h("div", { class: "lines" },
       h("div", { class: "thumbs" }, lines.slice(0, 3).map((l) => l.img ? h("img", { src: l.img, alt: "" }) : h("span", { class: "ph" }, "🍽️"))),
       h("div", { class: "txt" }, lines.slice(0, 2).map((l) => h("div", { text: `x${l.qty} ${l.name}${l.size ? ` (${l.size.name})` : ""}` })),
-        lines.length > 2 ? h("div", { text: `+ ${lines.length - 2} أصناف أخرى` }) : null),
+        lines.length > 2 ? h("div", { text: t("+ {n} أصناف أخرى", { n: lines.length - 2 }) }) : null),
       h("button", { class: "btn btn-yellow btn-sm", type: "button", onClick: () => {
         for (const l of lines) addToCart({ ...l });
-        toast("رجّعنا طلبك السابق للسلة ✅", "success");
+        toast(t("رجّعنا طلبك السابق للسلة ✅"), "success");
         openCheckout();
-      } }, "↻ إعادة الطلب")));
+      } }, t("↻ إعادة الطلب"))));
 }
 
 /* ---------------- بطاقات العناصر ---------------- */
@@ -487,8 +500,8 @@ function productCard(p) {
         imgs.length ? h("div", { class: "gallery" }, imgs.map((u) => h("img", { src: u, alt: "", loading: "lazy" })))
                     : h("div", { class: "ph", "aria-hidden": "true" }, MODE_ICON[mode]),
         imgs.length > 1 ? h("span", { class: "pill count" }, `1/${imgs.length} 📷`) : null,
-        off ? h("span", { class: "pill na" }, mode === "booking" ? "محجوز" : "غير متاح") : null,
-        num(p.price) > 0 ? h("span", { class: "pill price" }, money(p.price), unit ? ` / ${unit}` : "") : null),
+        off ? h("span", { class: "pill na" }, mode === "booking" ? t("محجوز") : t("غير متاح")) : null,
+        num(p.price) > 0 ? h("span", { class: "pill price" }, money(p.price), unit ? ` / ${t(unit)}` : "") : null),
       h("div", { class: "body" },
         h("h3", { text: p.name }),
         p.description ? h("p", { text: p.description }) : null,
@@ -500,21 +513,21 @@ function productCard(p) {
   let price = null;
   if (mode === "order") {
     const hasSizes = (p.options_json?.sizes || []).length > 0;
-    price = h("div", { class: "item-price" }, hasSizes ? h("span", { class: "from" }, "يبدأ من") : null, money(startingPrice(p)));
+    price = h("div", { class: "item-price" }, hasSizes ? h("span", { class: "from" }, t("يبدأ من")) : null, money(startingPrice(p)));
   } else if (num(p.price) > 0) {
-    price = h("div", { class: "item-price" }, h("span", { class: "from" }, mode === "charity" ? "قيمة السهم" : "رسوم الاستشارة"), money(p.price));
+    price = h("div", { class: "item-price" }, h("span", { class: "from" }, mode === "charity" ? t("قيمة السهم") : t("رسوم الاستشارة")), money(p.price));
   }
 
   const q = mode === "order" ? qtyInCart(p.id) : 0;
   const action = off ? null : mode === "order"
     ? h("span", { class: `add-btn${q ? " has-qty" : ""}`, dataset: { pid: p.id }, "aria-hidden": "true" }, q ? String(q) : "+")
-    : h("span", { class: "cta-pill" }, mode === "charity" ? "تبرع" : "احجز");
+    : h("span", { class: "cta-pill" }, mode === "charity" ? t("تبرع") : t("احجز"));
 
   const card = h("button", { class: `item product${imgs[0] ? "" : " no-img"}${off ? " off unavailable" : ""}`, type: "button", disabled: off, "aria-label": p.name },
     h("div", { class: "item-info" },
       h("h3", { class: "item-name product-name", text: p.name }),
       p.description ? h("p", { class: "item-desc", text: p.description }) : null,
-      off ? h("span", { class: "soldout" }, "غير متوفر حالياً") : price),
+      off ? h("span", { class: "soldout" }, t("غير متوفر حالياً")) : price),
     h("div", { class: "item-media" },
       imgs[0] ? h("img", { src: imgs[0], alt: "", loading: "lazy", width: "112", height: "112" }) : h("div", { class: "ph", "aria-hidden": "true" }, MODE_ICON[mode]),
       action));
@@ -537,9 +550,9 @@ function ctaBar() {
     if (!count) return h("div");
     return h("div", { class: "cartbar-wrap cta-bar" },
       h("button", { class: "cartbar btn", type: "button", onClick: openCheckout },
-        h("span", { class: "count" }, String(count)), h("span", { class: "label" }, "عرض السلة"), h("span", { class: "total" }, money(cartSubtotal()))));
+        h("span", { class: "count" }, String(count)), h("span", { class: "label" }, t("عرض السلة")), h("span", { class: "total" }, money(cartSubtotal()))));
   }
-  const label = { booking: "📅 احجز الآن", inquiry: "🏢 اطلب معاينة / استفسار", charity: "💚 تبرع الآن", legal: "⚖️ احجز استشارة" }[mode];
+  const label = { booking: t("📅 احجز الآن"), inquiry: t("🏢 اطلب معاينة / استفسار"), charity: t("💚 تبرع الآن"), legal: t("⚖️ احجز استشارة") }[mode];
   const open = { booking: () => openBooking(null), inquiry: () => openInquiry(null), charity: () => openDonation(null), legal: () => openLegal(null) }[mode];
   if (mode === "booking" && !S.products.some((p) => p.is_available)) return h("div");
   return h("div", { class: "cartbar-wrap cta-bar" },
@@ -586,7 +599,7 @@ function sanitizeCart(lines, notify = false) {
     out.push({ pid: p.id, name: p.name, img: p.image_url || null, base: num(p.price), size, addons: ad,
       note: oneLine(l.note, 120), qty: Math.min(99, Math.max(1, Math.floor(num(l.qty)) || 1)) });
   }
-  if (notify && dropped) toast("تم تحديث السلة: بعض الأصناف لم تعد متوفرة");
+  if (notify && dropped) toast(t("تم تحديث السلة: بعض الأصناف لم تعد متوفرة"));
   return out;
 }
 
@@ -604,9 +617,9 @@ function stepper(value, onChange, small = false, min = 1) {
   let v = value;
   const set = (n) => { v = Math.min(99, Math.max(min, n)); out.textContent = String(v); onChange(v); };
   return h("div", { class: `stepper qty${small ? " sm" : ""}` },
-    h("button", { type: "button", "aria-label": "زيادة", onClick: () => set(v + 1) }, "+"),
+    h("button", { type: "button", "aria-label": t("زيادة"), onClick: () => set(v + 1) }, "+"),
     out,
-    h("button", { type: "button", "aria-label": "إنقاص", onClick: () => set(v - 1) }, "−"));
+    h("button", { type: "button", "aria-label": t("إنقاص"), onClick: () => set(v - 1) }, "−"));
 }
 
 function optGroup(title, tag, sub, rows) {
@@ -622,52 +635,52 @@ function openProduct(p) {
   const state = { size: null, addons: new Set(), qty: 1 };
   const imgs = productImages(p);
 
-  const sizeTag = h("span", { class: "opt-tag req" }, "مطلوب");
+  const sizeTag = h("span", { class: "opt-tag req" }, t("مطلوب"));
   const addBtn = h("button", { class: "btn btn-primary", type: "button" });
   const unit = () => (state.size ? num(state.size.price) : num(p.price)) + [...state.addons].reduce((a, i) => a + num(addons[i].price), 0);
   const updateBtn = () => {
     const need = sizes.length && !state.size;
-    fill(addBtn, h("span", {}, need ? "اختر الحجم أولاً" : "أضف للسلة"), h("span", {}, money(unit() * state.qty)));
+    fill(addBtn, h("span", {}, need ? t("اختر الحجم أولاً") : t("أضف للسلة")), h("span", {}, money(unit() * state.qty)));
     addBtn.classList.toggle("btn-soft", !!need);
     addBtn.classList.toggle("btn-primary", !need);
   };
 
-  const note = h("textarea", { class: "note-input", maxlength: "120", placeholder: "مثال: بدون بصل، صوص إضافي...", "aria-label": "ملاحظة على الصنف" });
+  const note = h("textarea", { class: "note-input", maxlength: "120", placeholder: t("مثال: بدون بصل، صوص إضافي..."), "aria-label": t("ملاحظة على الصنف") });
   const body = [
     h("div", { class: `p-hero${imgs[0] ? "" : " no-img"}` }, imgs[0] ? h("img", { src: imgs[0], alt: p.name }) : null),
     h("div", { class: "stack", style: { gap: "6px" } },
       h("h2", { class: "p-title", text: p.name }),
       p.description ? h("p", { class: "p-desc", text: p.description }) : null,
-      h("div", { class: "p-price" }, sizes.length ? h("span", { class: "muted small", style: { "font-weight": "500" } }, "يبدأ من ") : null, money(startingPrice(p)))),
+      h("div", { class: "p-price" }, sizes.length ? h("span", { class: "muted small", style: { "font-weight": "500" } }, t("يبدأ من ")) : null, money(startingPrice(p)))),
   ];
 
   let sizeGroup = null;
   if (sizes.length) {
     const group = `size-${p.id}`;
-    sizeGroup = optGroup("اختر الحجم / النوع", sizeTag, "اختر خياراً واحداً", sizes.map((sz) =>
+    sizeGroup = optGroup(t("اختر الحجم / النوع"), sizeTag, t("اختر خياراً واحداً"), sizes.map((sz) =>
       h("label", { class: "opt-row option" },
         h("input", { type: "radio", name: group, onChange: () => {
-          state.size = sz; sizeTag.textContent = "✓ تم"; sizeTag.classList.add("ok"); updateBtn();
+          state.size = sz; sizeTag.textContent = t("✓ تم"); sizeTag.classList.add("ok"); updateBtn();
         } }),
         h("span", { class: "n", text: sz.name }),
         h("span", { class: "pr", text: money(sz.price) }))));
     body.push(sizeGroup);
   }
   if (addons.length) {
-    body.push(optGroup("الإضافات", h("span", { class: "opt-tag" }, "اختياري"), null, addons.map((a, i) =>
+    body.push(optGroup(t("الإضافات"), h("span", { class: "opt-tag" }, t("اختياري")), null, addons.map((a, i) =>
       h("label", { class: "opt-row option" },
         h("input", { type: "checkbox", onChange: (e) => { e.target.checked ? state.addons.add(i) : state.addons.delete(i); updateBtn(); } }),
         h("span", { class: "n", text: a.name }),
-        h("span", { class: "pr", text: num(a.price) ? `+${money(a.price)}` : "مجاناً" })))));
+        h("span", { class: "pr", text: num(a.price) ? `+${money(a.price)}` : t("مجاناً") })))));
   }
-  body.push(optGroup("ملاحظات خاصة", h("span", { class: "opt-tag" }, "اختياري"), null, h("div", { style: { padding: "4px 16px 4px" } }, note)));
+  body.push(optGroup(t("ملاحظات خاصة"), h("span", { class: "opt-tag" }, t("اختياري")), null, h("div", { style: { padding: "4px 16px 4px" } }, note)));
 
   const foot = h("div", { class: "p-foot" }, stepper(1, (v) => { state.qty = v; updateBtn(); }), addBtn);
   const sheet = openSheet({ title: p.name, body, foot, className: "hero-sheet" });
   updateBtn();
   addBtn.addEventListener("click", () => {
     if (sizes.length && !state.size) {
-      toast("⚠️ الرجاء اختيار الحجم أو النوع قبل الإضافة للسلة", "error");
+      toast(t("⚠️ الرجاء اختيار الحجم أو النوع قبل الإضافة للسلة"), "error");
       sizeGroup.scrollIntoView({ behavior: "smooth", block: "center" });
       sizeGroup.classList.remove("shake"); void sizeGroup.offsetWidth; sizeGroup.classList.add("shake");
       return;
@@ -675,7 +688,7 @@ function openProduct(p) {
     addToCart({ pid: p.id, name: p.name, img: p.image_url || null, base: num(p.price), size: state.size,
                 addons: [...state.addons].sort().map((i) => addons[i]), note: oneLine(note.value, 120), qty: state.qty });
     sheet.close();
-    toast("تمت الإضافة للسلة ✅", "success");
+    toast(t("تمت الإضافة للسلة ✅"), "success");
   });
 }
 
@@ -702,8 +715,8 @@ function choices(name, options, value, onChange) {
 }
 
 function nameAndPhone(c) {
-  const name = textField("الاسم", { autocomplete: "name", value: c.name || "", maxlength: "60", required: true, placeholder: "اسمك الكريم" });
-  const phone = textField("رقم الجوال", { type: "tel", inputmode: "tel", autocomplete: "tel", value: c.phone || "",
+  const name = textField(t("الاسم"), { autocomplete: "name", value: c.name || "", maxlength: "60", required: true, placeholder: t("اسمك الكريم") });
+  const phone = textField(t("رقم الجوال"), { type: "tel", inputmode: "tel", autocomplete: "tel", value: c.phone || "",
     maxlength: "20", placeholder: "05xxxxxxxx", dir: "ltr", style: { "text-align": "right" } });
   return { name, phone };
 }
@@ -713,8 +726,8 @@ function validateNamePhone(f) {
   f.name.input.classList.toggle("invalid", n.length < 2);
   const okPhone = isValidPhone(f.phone.input.value);
   f.phone.input.classList.toggle("invalid", !okPhone);
-  if (n.length < 2) { toast("الرجاء كتابة الاسم", "error"); f.name.input.focus(); return null; }
-  if (!okPhone) { toast("رقم الجوال غير صحيح", "error"); f.phone.input.focus(); return null; }
+  if (n.length < 2) { toast(t("الرجاء كتابة الاسم"), "error"); f.name.input.focus(); return null; }
+  if (!okPhone) { toast(t("رقم الجوال غير صحيح"), "error"); f.phone.input.focus(); return null; }
   return { name: n, phone: toLatinDigits(f.phone.input.value).replace(/[^\d+]/g, "") };
 }
 
@@ -732,47 +745,47 @@ function openCheckout() {
   const linesBox = h("div", { class: "stack", style: { gap: "12px" } });
   const billBox = h("div");
   const f = nameAndPhone(c);
-  const district = textField("الحي", { value: c.district || "", maxlength: "60", autocomplete: "address-level3", placeholder: "مثال: النرجس" });
-  const address = textField("العنوان التفصيلي", { value: c.address || "", maxlength: "160", placeholder: "الشارع، رقم المبنى، علامة مميزة", autocomplete: "street-address" });
-  const notes = textField("ملاحظات للطلب", { multiline: true, maxlength: "400", placeholder: "أي تفاصيل تحب نعرفها؟" });
+  const district = textField(t("الحي"), { value: c.district || "", maxlength: "60", autocomplete: "address-level3", placeholder: t("مثال: النرجس") });
+  const address = textField(t("العنوان التفصيلي"), { value: c.address || "", maxlength: "160", placeholder: t("الشارع، رقم المبنى، علامة مميزة"), autocomplete: "street-address" });
+  const notes = textField(t("ملاحظات للطلب"), { multiline: true, maxlength: "400", placeholder: t("أي تفاصيل تحب نعرفها؟") });
 
-  const locTitle = h("b", {}, "حدّد موقعي عبر GPS");
-  const locSub = h("small", {}, "اختياري إذا كتبت الحي — يساعد المندوب يوصلك أسرع");
+  const locTitle = h("b", {}, t("حدّد موقعي عبر GPS"));
+  const locSub = h("small", {}, t("اختياري إذا كتبت الحي — يساعد المندوب يوصلك أسرع"));
   const gpsBtn = h("button", { class: "loc-card", type: "button" }, h("span", { class: "i", "aria-hidden": "true" }, "📍"), h("span", { class: "grow" }, locTitle, locSub));
   gpsBtn.addEventListener("click", () => {
-    if (!navigator.geolocation) return toast("المتصفح لا يدعم تحديد الموقع", "error");
+    if (!navigator.geolocation) return toast(t("المتصفح لا يدعم تحديد الموقع"), "error");
     gpsBtn.disabled = true;
-    locSub.textContent = "جاري تحديد الموقع...";
+    locSub.textContent = t("جاري تحديد الموقع...");
     navigator.geolocation.getCurrentPosition((pos) => {
       const lat = pos.coords.latitude.toFixed(6), lng = pos.coords.longitude.toFixed(6);
       st.gps = `https://maps.google.com/?q=${lat},${lng}`;
-      locTitle.textContent = "✅ تم تحديد موقعك";
-      locSub.textContent = "اضغط لتحديث الموقع";
+      locTitle.textContent = t("✅ تم تحديد موقعك");
+      locSub.textContent = t("اضغط لتحديث الموقع");
       gpsBtn.classList.add("done");
       gpsBtn.disabled = false;
     }, (e) => {
       gpsBtn.disabled = false;
-      locSub.textContent = e.code === 1 ? "تم رفض إذن الموقع — اكتب الحي يدوياً" : "تعذر تحديد الموقع — اكتب الحي يدوياً";
+      locSub.textContent = e.code === 1 ? t("تم رفض إذن الموقع — اكتب الحي يدوياً") : t("تعذر تحديد الموقع — اكتب الحي يدوياً");
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   });
 
-  const deliverySec = sec("عنوان التوصيل", gpsBtn, district.el, address.el);
+  const deliverySec = sec(t("عنوان التوصيل"), gpsBtn, district.el, address.el);
   deliverySec.hidden = st.type !== "delivery";
 
   const ibanBox = s.iban_number ? h("div", { class: "iban-box", hidden: st.pay !== "transfer" },
-    h("code", { text: s.iban_number }), h("button", { class: "btn btn-soft btn-sm", type: "button", onClick: () => copyText(s.iban_number) }, "نسخ")) : null;
+    h("code", { text: s.iban_number }), h("button", { class: "btn btn-soft btn-sm", type: "button", onClick: () => copyText(s.iban_number) }, t("نسخ"))) : null;
   const pays = [
-    { v: "cash", i: "💵", l: "نقداً عند الاستلام" },
-    { v: "card", i: "💳", l: "شبكة / مدى عند الاستلام" },
-    { v: "transfer", i: "🏦", l: "تحويل بنكي" },
+    { v: "cash", i: "💵", l: t("نقداً عند الاستلام") },
+    { v: "card", i: "💳", l: t("شبكة / مدى عند الاستلام") },
+    { v: "transfer", i: "🏦", l: t("تحويل بنكي") },
   ];
-  const paySec = sec("طريقة الدفع", h("div", {}, pays.map((p) => h("label", { class: "pay-row" },
+  const paySec = sec(t("طريقة الدفع"), h("div", {}, pays.map((p) => h("label", { class: "pay-row" },
     h("span", { class: "i", "aria-hidden": "true" }, p.i), h("span", { class: "n" }, p.l),
     h("input", { type: "radio", name: "pay", checked: st.pay === p.v, onChange: () => { st.pay = p.v; if (ibanBox) ibanBox.hidden = p.v !== "transfer"; } })))), ibanBox);
 
-  const typeSec = sec("طريقة الاستلام", choices("otype", [
-    { value: "delivery", icon: "🛵", label: "توصيل", sub: num(s.delivery_fee) ? money(s.delivery_fee) : "مجاني" },
-    { value: "pickup", icon: "🏃", label: "استلام من المحل", sub: "بدون رسوم" },
+  const typeSec = sec(t("طريقة الاستلام"), choices("otype", [
+    { value: "delivery", icon: "🛵", label: t("توصيل"), sub: num(s.delivery_fee) ? money(s.delivery_fee) : t("مجاني") },
+    { value: "pickup", icon: "🏃", label: t("استلام من المحل"), sub: t("بدون رسوم") },
   ], st.type, (v) => { st.type = v; deliverySec.hidden = v !== "delivery"; renderBill(); }));
 
   function renderLines() {
@@ -781,7 +794,7 @@ function openCheckout() {
       h("div", { class: "meta" },
         h("b", { text: l.name }),
         l.size ? h("small", { text: l.size.name }) : null,
-        l.addons.length ? h("small", { text: `+ ${l.addons.map((a) => a.name).join("، ")}` }) : null,
+        l.addons.length ? h("small", { text: `+ ${l.addons.map((a) => a.name).join(isEn() ? ", " : "، ")}` }) : null,
         l.note ? h("small", { text: `📝 ${l.note}` }) : null,
         h("div", { class: "lp price", text: money(lineUnit(l) * l.qty) })),
       stepper(l.qty, (v) => {
@@ -797,33 +810,33 @@ function openCheckout() {
     const sub = cartSubtotal();
     const fee = st.type === "delivery" ? num(s.delivery_fee) : 0;
     fill(billBox, bill([
-      ["مجموع الأصناف", money(sub)],
-      st.type === "delivery" ? ["رسوم التوصيل", fee ? money(fee) : "مجاناً"] : null,
-      ["الإجمالي", money(sub + fee), true],
+      [t("مجموع الأصناف"), money(sub)],
+      st.type === "delivery" ? [t("رسوم التوصيل"), fee ? money(fee) : t("مجاناً")] : null,
+      [t("الإجمالي"), money(sub + fee), true],
     ]));
   }
 
-  const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, "إرسال الطلب عبر واتساب");
+  const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, t("إرسال الطلب عبر واتساب"));
   const sheet = openSheet({
-    title: "سلة الطلب",
+    title: t("سلة الطلب"),
     className: "flow-sheet",
     body: [
-      sec(h("div", { class: "row between", style: { width: "100%" } }, h("b", {}, `طلبك من ${s.name}`),
-        h("button", { class: "link-btn", type: "button", onClick: () => sheet.close() }, "+ أضف أصناف")), linesBox),
+      sec(h("div", { class: "row between", style: { width: "100%" } }, h("b", {}, t("طلبك من {n}", { n: s.name })),
+        h("button", { class: "link-btn", type: "button", onClick: () => sheet.close() }, t("+ أضف أصناف"))), linesBox),
       typeSec, deliverySec,
-      sec("بياناتك", f.name.el, f.phone.el),
+      sec(t("بياناتك"), f.name.el, f.phone.el),
       paySec,
       sec(null, notes.el),
-      sec("ملخص الفاتورة", billBox),
+      sec(t("ملخص الفاتورة"), billBox),
     ],
     foot: sendBtn,
   });
   renderLines();
   renderBill();
-  bindCooldown(sendBtn, "إرسال الطلب عبر واتساب");
+  bindCooldown(sendBtn, t("إرسال الطلب عبر واتساب"));
 
   sendBtn.addEventListener("click", async () => {
-    if (!S.cart.length) return toast("السلة فارغة", "error");
+    if (!S.cart.length) return toast(t("السلة فارغة"), "error");
     const who = validateNamePhone(f);
     if (!who) return;
     const dist = oneLine(district.input.value, 60);
@@ -831,7 +844,7 @@ function openCheckout() {
     if (st.type === "delivery" && !dist && !st.gps) {
       district.input.classList.add("invalid");
       district.input.focus();
-      return toast("للتوصيل: اكتب اسم الحي أو حدّد موقعك عبر GPS", "error");
+      return toast(t("للتوصيل: اكتب اسم الحي أو حدّد موقعك عبر GPS"), "error");
     }
     saveCustomer({ name: who.name, phone: who.phone, district: dist, address: addr, order_type: st.type, pay: st.pay });
 
@@ -872,21 +885,21 @@ function buildOrderMessage(no, d) {
   L.push("🛒 *الأصناف:*");
   S.cart.forEach((l, i) => {
     L.push(`${i + 1}) *${l.name}*`);
-    if (l.size) L.push(`   • الحجم: ${l.size.name} (${money(l.size.price)})`);
-    else L.push(`   • السعر: ${money(l.base)}`);
-    if (l.addons.length) L.push(`   • الإضافات: ${l.addons.map((a) => `${a.name} (+${money(a.price)})`).join("، ")}`);
+    if (l.size) L.push(`   • الحجم: ${l.size.name} (${moneyText(l.size.price)})`);
+    else L.push(`   • السعر: ${moneyText(l.base)}`);
+    if (l.addons.length) L.push(`   • الإضافات: ${l.addons.map((a) => `${a.name} (+${moneyText(a.price)})`).join("، ")}`);
     if (l.note) L.push(`   • ملاحظة: ${l.note}`);
     L.push(`   • الكمية: ${l.qty}`);
-    L.push(`   • المجموع الفرعي: ${money(lineUnit(l) * l.qty)}`);
+    L.push(`   • المجموع الفرعي: ${moneyText(lineUnit(l) * l.qty)}`);
   });
   if (d.note) {
     L.push(SEP);
     L.push(`📝 *ملاحظات:* ${d.note}`);
   }
   L.push(SEP);
-  L.push(`🧮 مجموع الأصناف: ${money(d.sub)}`);
-  if (d.type === "delivery") L.push(`🛵 رسوم التوصيل: ${d.fee ? money(d.fee) : "مجاناً"}`);
-  L.push(`💰 *الإجمالي النهائي: ${money(d.sub + d.fee)}*`);
+  L.push(`🧮 مجموع الأصناف: ${moneyText(d.sub)}`);
+  if (d.type === "delivery") L.push(`🛵 رسوم التوصيل: ${d.fee ? moneyText(d.fee) : "مجاناً"}`);
+  L.push(`💰 *الإجمالي النهائي: ${moneyText(d.sub + d.fee)}*`);
   L.push(`💳 *طريقة الدفع:* ${d.payLabel}`);
   return L.join("\n");
 }
@@ -901,26 +914,26 @@ function cooldownLeft() {
 
 function bindCooldown(btn, label) {
   const tick = () => {
-    if (!btn.isConnected) return clearInterval(t);
+    if (!btn.isConnected) return clearInterval(timer);
     const left = cooldownLeft();
-    if (left > 0) { btn.disabled = true; btn.textContent = `انتظر ${left} ثانية قبل الإرسال مجدداً`; }
+    if (left > 0) { btn.disabled = true; btn.textContent = t("انتظر {n} ثانية قبل الإرسال مجدداً", { n: left }); }
     else if (btn.dataset.cd === "1") { btn.disabled = false; btn.textContent = label; }
     btn.dataset.cd = left > 0 ? "1" : "0";
   };
-  const t = setInterval(tick, 1000);
+  const timer = setInterval(tick, 1000);
   tick();
 }
 
 async function submitToWhatsApp(btn, total, items, build) {
   const st = openState(S.store, now());
   if (!st.open) {
-    toast(st.manual ? "المتجر مغلق حالياً" : `مغلق الآن — يفتح الساعة ${fmtTime12(st.opensAt)}`, "error");
+    toast(st.manual ? t("المتجر مغلق حالياً") : t("مغلق الآن — يفتح الساعة {t}", { t: fmtTime12(st.opensAt) }), "error");
     return false;
   }
   if (cooldownLeft() > 0) return false;
   const label = btn.textContent;
   btn.disabled = true;
-  fill(btn, h("span", { class: "spinner", "aria-hidden": "true" }), " جاري التجهيز...");
+  fill(btn, h("span", { class: "spinner", "aria-hidden": "true" }), t(" جاري التجهيز..."));
 
   let no;
   try {
@@ -929,7 +942,7 @@ async function submitToWhatsApp(btn, total, items, build) {
     }), 3500);
     if (r?.ok === false) {
       btn.disabled = false; btn.textContent = label;
-      toast(r.error === "rate_limited" ? "طلبات كثيرة خلال وقت قصير، انتظر دقائق ثم حاول" : "المتجر غير متاح حالياً", "error");
+      toast(r.error === "rate_limited" ? t("طلبات كثيرة خلال وقت قصير، انتظر دقائق ثم حاول") : t("المتجر غير متاح حالياً"), "error");
       return false;
     }
     no = r?.order_no;
@@ -948,12 +961,12 @@ async function submitToWhatsApp(btn, total, items, build) {
 
 function showSent(url, no) {
   openSheet({
-    title: "تم تجهيز طلبك ✅",
+    title: t("تم تجهيز طلبك ✅"),
     body: h("div", { class: "stack center", style: { "justify-items": "center", padding: "8px 0" } },
       h("img", { src: "/assets/img/order-success.svg", alt: "", style: { width: "190px" } }),
-      h("b", { style: { "font-size": "20px" }, text: `رقم الطلب #${no}` }),
-      h("p", { class: "muted", style: { margin: "0" }, text: "فتحنا لك واتساب برسالة جاهزة. اضغط «إرسال» داخل واتساب لإتمام العملية." })),
-    foot: h("a", { class: "btn btn-primary btn-lg btn-block", href: url, target: "_blank", rel: "noopener" }, "فتح واتساب مرة أخرى"),
+      h("b", { style: { "font-size": "20px" }, text: t("رقم الطلب #{n}", { n: no }) }),
+      h("p", { class: "muted", style: { margin: "0" }, text: t("فتحنا لك واتساب برسالة جاهزة. اضغط «إرسال» داخل واتساب لإتمام العملية.") })),
+    foot: h("a", { class: "btn btn-primary btn-lg btn-block", href: url, target: "_blank", rel: "noopener" }, t("فتح واتساب مرة أخرى")),
   });
 }
 
@@ -965,7 +978,7 @@ function openListing(p) {
   const imgs = productImages(p);
   const specs = p.options_json?.specs || [];
   const unit = p.options_json?.unit || (mode === "booking" ? "ليلة" : "");
-  const cta = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, mode === "booking" ? "📅 احجز هذه الوحدة" : "🏢 اطلب معاينة / استفسر");
+  const cta = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, mode === "booking" ? t("📅 احجز هذه الوحدة") : t("🏢 اطلب معاينة / استفسر"));
   const s = openSheet({
     title: p.name,
     className: "hero-sheet",
@@ -973,12 +986,12 @@ function openListing(p) {
       h("div", { class: `p-hero${imgs.length ? "" : " no-img"}` },
         imgs.length ? h("div", { class: "gallery", style: { height: "100%", display: "flex", "overflow-x": "auto", "scroll-snap-type": "x mandatory" } },
           imgs.map((u) => h("img", { src: u, alt: p.name, loading: "lazy", style: { flex: "none", width: "100%", "scroll-snap-align": "center" } }))) : null,
-        imgs.length > 1 ? h("span", { class: "pill count", style: { top: "auto", bottom: "12px" } }, `${imgs.length} صور ← اسحب`) : null),
+        imgs.length > 1 ? h("span", { class: "pill count", style: { top: "auto", bottom: "12px" } }, t("{n} صور ← اسحب", { n: imgs.length })) : null),
       h("div", { class: "stack", style: { gap: "6px" } },
         h("h2", { class: "p-title", text: p.name }),
-        num(p.price) > 0 ? h("div", { class: "p-price" }, money(p.price), unit ? h("span", { class: "muted small" }, ` / ${unit}`) : null) : null,
+        num(p.price) > 0 ? h("div", { class: "p-price" }, money(p.price), unit ? h("span", { class: "muted small" }, ` / ${t(unit)}`) : null) : null,
         p.description ? h("p", { class: "p-desc", text: p.description }) : null),
-      specs.length ? optGroup("المواصفات", null, null, specs.map((x) => h("div", { class: "opt-row", style: { cursor: "default" } },
+      specs.length ? optGroup(t("المواصفات"), null, null, specs.map((x) => h("div", { class: "opt-row", style: { cursor: "default" } },
         h("span", { class: "n muted", text: x.label }), h("b", { text: x.value })))) : null,
     ],
     foot: cta,
@@ -994,7 +1007,7 @@ function itemSelect(selected, { allowGeneral, generalLabel }) {
 }
 
 const periodChoices = (name, set) => choices(name, [
-  { value: "am", icon: "🌤️", label: "صباحاً" }, { value: "pm", icon: "🌙", label: "مساءً" }, { value: "any", icon: "🕒", label: "أي وقت" },
+  { value: "am", icon: "🌤️", label: t("صباحاً") }, { value: "pm", icon: "🌙", label: t("مساءً") }, { value: "any", icon: "🕒", label: t("أي وقت") },
 ], "any", set);
 
 /* ---------------- الحجز ---------------- */
@@ -1007,47 +1020,47 @@ function openBooking(p) {
   const date = h("input", { class: "input", type: "date", min: today, value: today });
   let nights = 1;
   const f = nameAndPhone(c);
-  const guests = textField("عدد الأشخاص (اختياري)", { type: "number", inputmode: "numeric", min: "1", max: "500" });
-  const notes = textField("ملاحظات (اختياري)", { multiline: true, maxlength: "400" });
+  const guests = textField(t("عدد الأشخاص (اختياري)"), { type: "number", inputmode: "numeric", min: "1", max: "500" });
+  const notes = textField(t("ملاحظات (اختياري)"), { multiline: true, maxlength: "400" });
   const billBox = h("div");
   const unitLbl = h("b");
 
   function update() {
     const it = getItem();
     const unit = it?.options_json?.unit || "ليلة";
-    unitLbl.textContent = `عدد ${unit === "ليلة" ? "الليالي" : unit === "يوم" ? "الأيام" : unit === "ساعة" ? "الساعات" : "الوحدات"}`;
+    unitLbl.textContent = t(unit === "ليلة" ? "عدد الليالي" : unit === "يوم" ? "عدد الأيام" : unit === "ساعة" ? "عدد الساعات" : "عدد الوحدات");
     const price = num(it?.price);
     const out = date.value ? addDays(date.value, nights) : "";
     fill(billBox, bill([
-      [`السعر / ${unit}`, money(price)],
-      date.value && (unit === "ليلة" || unit === "يوم") ? ["تاريخ الخروج", fmtDateAr(out)] : null,
-      ["الإجمالي", money(price * nights), true],
+      [t("السعر / {u}", { u: t(unit) }), money(price)],
+      date.value && (unit === "ليلة" || unit === "يوم") ? [t("تاريخ الخروج"), fmtDateAr(out)] : null,
+      [t("الإجمالي"), money(price * nights), true],
     ]));
   }
   sel.addEventListener("change", update);
   date.addEventListener("change", update);
 
-  const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, "إرسال طلب الحجز عبر واتساب");
+  const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, t("إرسال طلب الحجز عبر واتساب"));
   const sheet = openSheet({
-    title: "طلب حجز",
+    title: t("طلب حجز"),
     className: "flow-sheet",
     body: [
-      sec("تفاصيل الحجز",
-        h("label", { class: "field" }, h("span", { text: "الوحدة" }), sel),
-        h("label", { class: "field" }, h("span", { text: "تاريخ الدخول" }), date),
+      sec(t("تفاصيل الحجز"),
+        h("label", { class: "field" }, h("span", { text: t("الوحدة") }), sel),
+        h("label", { class: "field" }, h("span", { text: t("تاريخ الدخول") }), date),
         h("div", { class: "row between" }, unitLbl, stepper(1, (v) => { nights = Math.min(60, v); update(); }, true))),
-      sec("بياناتك", f.name.el, f.phone.el, guests.el, notes.el),
-      sec("ملخص الحجز", billBox),
+      sec(t("بياناتك"), f.name.el, f.phone.el, guests.el, notes.el),
+      sec(t("ملخص الحجز"), billBox),
     ],
     foot: sendBtn,
   });
   update();
-  bindCooldown(sendBtn, "إرسال طلب الحجز عبر واتساب");
+  bindCooldown(sendBtn, t("إرسال طلب الحجز عبر واتساب"));
 
   sendBtn.addEventListener("click", async () => {
     const it = getItem();
-    if (!it) return toast("اختر الوحدة", "error");
-    if (!date.value || date.value < today) { date.classList.add("invalid"); return toast("اختر تاريخ دخول صحيح", "error"); }
+    if (!it) return toast(t("اختر الوحدة"), "error");
+    if (!date.value || date.value < today) { date.classList.add("invalid"); return toast(t("اختر تاريخ دخول صحيح"), "error"); }
     const who = validateNamePhone(f);
     if (!who) return;
     saveCustomer({ name: who.name, phone: who.phone });
@@ -1058,12 +1071,12 @@ function openBooking(p) {
     const ok = await submitToWhatsApp(sendBtn, total, [{ n: it.name.slice(0, 60), q: nights, t: total }], (no) => {
       const L = [`📅 *طلب حجز جديد #${no}*`, `🏪 ${s.name}`, SEP,
         `👤 *الاسم:* ${who.name}`, `📱 *الجوال:* ${who.phone}`, SEP,
-        `🏡 *الوحدة:* ${it.name}`, `📆 *تاريخ الدخول:* ${fmtDateAr(date.value)}`,
+        `🏡 *الوحدة:* ${it.name}`, `📆 *تاريخ الدخول:* ${fmtDateMsg(date.value)}`,
         `🌙 *المدة:* ${nights} ${unit}`];
-      if (unit === "ليلة" || unit === "يوم") L.push(`🚪 *تاريخ الخروج:* ${fmtDateAr(addDays(date.value, nights))}`);
+      if (unit === "ليلة" || unit === "يوم") L.push(`🚪 *تاريخ الخروج:* ${fmtDateMsg(addDays(date.value, nights))}`);
       if (g > 0) L.push(`👥 *عدد الأشخاص:* ${g}`);
       if (note) L.push(SEP, `📝 *ملاحظات:* ${note}`);
-      L.push(SEP, `💵 السعر / ${unit}: ${money(it.price)}`, `💰 *الإجمالي: ${money(total)}*`);
+      L.push(SEP, `💵 السعر / ${unit}: ${moneyText(it.price)}`, `💰 *الإجمالي: ${moneyText(total)}*`);
       return L.join("\n");
     });
     if (ok) sheet.close();
@@ -1075,29 +1088,29 @@ function openInquiry(p) {
   const s = S.store;
   const c = customer();
   const today = tzParts(s.timezone, now()).ymd;
-  const sel = itemSelect(p, { allowGeneral: true, generalLabel: "استفسار عام" });
+  const sel = itemSelect(p, { allowGeneral: true, generalLabel: t("استفسار عام") });
   let kind = "visit";
   const kindSeg = choices("ikind", [
-    { value: "visit", icon: "👀", label: "معاينة" }, { value: "ask", icon: "💬", label: "استفسار" }, { value: "hold", icon: "📌", label: "حجز مبدئي" },
+    { value: "visit", icon: "👀", label: t("معاينة") }, { value: "ask", icon: "💬", label: t("استفسار") }, { value: "hold", icon: "📌", label: t("حجز مبدئي") },
   ], kind, (v) => { kind = v; });
   const date = h("input", { class: "input", type: "date", min: today });
   let period = "any";
   const f = nameAndPhone(c);
-  const notes = textField("تفاصيل إضافية (اختياري)", { multiline: true, maxlength: "500", placeholder: "الميزانية، المتطلبات، أسئلتك..." });
-  const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, "إرسال الطلب عبر واتساب");
+  const notes = textField(t("تفاصيل إضافية (اختياري)"), { multiline: true, maxlength: "500", placeholder: t("الميزانية، المتطلبات، أسئلتك...") });
+  const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, t("إرسال الطلب عبر واتساب"));
 
   const sheet = openSheet({
-    title: "طلب معاينة / استفسار",
+    title: t("طلب معاينة / استفسار"),
     className: "flow-sheet",
     body: [
-      sec("العرض", sel),
-      sec("نوع الطلب", kindSeg),
-      sec("الموعد المفضل", date, periodChoices("iperiod", (v) => { period = v; })),
-      sec("بياناتك", f.name.el, f.phone.el, notes.el),
+      sec(t("العرض"), sel),
+      sec(t("نوع الطلب"), kindSeg),
+      sec(t("الموعد المفضل"), date, periodChoices("iperiod", (v) => { period = v; })),
+      sec(t("بياناتك"), f.name.el, f.phone.el, notes.el),
     ],
     foot: sendBtn,
   });
-  bindCooldown(sendBtn, "إرسال الطلب عبر واتساب");
+  bindCooldown(sendBtn, t("إرسال الطلب عبر واتساب"));
 
   sendBtn.addEventListener("click", async () => {
     const who = validateNamePhone(f);
@@ -1112,10 +1125,10 @@ function openInquiry(p) {
         `👤 *الاسم:* ${who.name}`, `📱 *الجوال:* ${who.phone}`, `📋 *نوع الطلب:* ${kindLabel}`, SEP];
       if (it) {
         L.push(`🏠 *العرض:* ${it.name}`);
-        if (num(it.price) > 0) L.push(`💵 *السعر المعلن:* ${money(it.price)}${it.options_json?.unit ? " / " + it.options_json.unit : ""}`);
+        if (num(it.price) > 0) L.push(`💵 *السعر المعلن:* ${moneyText(it.price)}${it.options_json?.unit ? " / " + it.options_json.unit : ""}`);
         for (const sp of (it.options_json?.specs || []).slice(0, 6)) L.push(`• ${sp.label}: ${sp.value}`);
       } else L.push("🏠 *العرض:* استفسار عام");
-      L.push(SEP, `🗓️ *الموعد المفضل:* ${date.value ? fmtDateAr(date.value) + " — " : ""}${periodLabel}`);
+      L.push(SEP, `🗓️ *الموعد المفضل:* ${date.value ? fmtDateMsg(date.value) + " — " : ""}${periodLabel}`);
       if (note) L.push(`📝 *تفاصيل:* ${note}`);
       return L.join("\n");
     });
@@ -1129,16 +1142,16 @@ function openInquiry(p) {
 function openDonation(p) {
   const s = S.store;
   const c = customer();
-  const sel = itemSelect(p, { allowGeneral: true, generalLabel: "تبرع عام" });
+  const sel = itemSelect(p, { allowGeneral: true, generalLabel: t("تبرع عام") });
   let amount = 100;
-  const custom = h("input", { class: "input", type: "number", inputmode: "decimal", min: "1", placeholder: "اكتب المبلغ", hidden: true });
+  const custom = h("input", { class: "input", type: "number", inputmode: "decimal", min: "1", placeholder: t("اكتب المبلغ"), hidden: true });
   const amountsBox = h("div", { class: "amounts" });
 
   function renderAmounts() {
     const it = S.products.find((x) => x.id === sel.value);
     const opts = [50, 100, 500].map((v) => ({ v, label: String(v) }));
-    if (it && num(it.price) > 0 && ![50, 100, 500].includes(num(it.price))) opts.unshift({ v: num(it.price), label: `سهم ${num(it.price)}` });
-    opts.push({ v: "open", label: "مفتوح" });
+    if (it && num(it.price) > 0 && ![50, 100, 500].includes(num(it.price))) opts.unshift({ v: num(it.price), label: t("سهم {n}", { n: num(it.price) }) });
+    opts.push({ v: "open", label: isEn() ? "Other" : "مفتوح" });
     amountsBox.style.setProperty("grid-template-columns", `repeat(${opts.length}, 1fr)`);
     fill(amountsBox, ...opts.map((o) => {
       const b = h("button", { type: "button", class: `btn ${amount === o.v ? "btn-primary" : ""}` }, o.label);
@@ -1153,31 +1166,31 @@ function openDonation(p) {
   }
   sel.addEventListener("change", renderAmounts);
 
-  const donor = textField("اسم المتبرع (اختياري)", { value: c.name || "", maxlength: "60", placeholder: "فاعل خير" });
-  const phone = textField("رقم الجوال", { type: "tel", inputmode: "tel", value: c.phone || "", maxlength: "20", placeholder: "05xxxxxxxx", dir: "ltr", style: { "text-align": "right" } });
-  const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, "إرسال إشعار التبرع عبر واتساب");
+  const donor = textField(t("اسم المتبرع (اختياري)"), { value: c.name || "", maxlength: "60", placeholder: t("فاعل خير") });
+  const phone = textField(t("رقم الجوال"), { type: "tel", inputmode: "tel", value: c.phone || "", maxlength: "20", placeholder: "05xxxxxxxx", dir: "ltr", style: { "text-align": "right" } });
+  const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, t("إرسال إشعار التبرع عبر واتساب"));
 
   const sheet = openSheet({
-    title: "تبرع الآن",
+    title: t("تبرع الآن"),
     className: "flow-sheet",
     body: [
-      sec("المبادرة", sel),
-      sec(`مبلغ التبرع (${CONFIG.CURRENCY})`, amountsBox, custom),
-      s.iban_number ? sec("حوّل المبلغ إلى الآيبان الرسمي",
+      sec(t("المبادرة"), sel),
+      sec(t("مبلغ التبرع ({c})", { c: CONFIG.CURRENCY }), amountsBox, custom),
+      s.iban_number ? sec(t("حوّل المبلغ إلى الآيبان الرسمي"),
         h("div", { class: "iban-box" }, h("code", { text: s.iban_number }),
-          h("button", { class: "btn btn-primary btn-sm", type: "button", onClick: () => copyText(s.iban_number, "تم نسخ الآيبان ✅") }, "نسخ")),
-        h("span", { class: "hint", text: "بعد التحويل أرسل الإشعار وأرفق صورة الإيصال في واتساب." })) : null,
-      sec("بيانات المتبرع", donor.el, phone.el),
+          h("button", { class: "btn btn-primary btn-sm", type: "button", onClick: () => copyText(s.iban_number, t("تم نسخ الآيبان ✅")) }, t("نسخ"))),
+        h("span", { class: "hint", text: t("بعد التحويل أرسل الإشعار وأرفق صورة الإيصال في واتساب.") })) : null,
+      sec(t("بيانات المتبرع"), donor.el, phone.el),
     ],
     foot: sendBtn,
   });
   renderAmounts();
-  bindCooldown(sendBtn, "إرسال إشعار التبرع عبر واتساب");
+  bindCooldown(sendBtn, t("إرسال إشعار التبرع عبر واتساب"));
 
   sendBtn.addEventListener("click", async () => {
     const value = amount === "open" ? num(custom.value) : num(amount);
-    if (!(value >= 1 && value <= 10000000)) { custom.classList.add("invalid"); return toast("اكتب مبلغاً صحيحاً", "error"); }
-    if (!isValidPhone(phone.input.value)) { phone.input.classList.add("invalid"); return toast("رقم الجوال غير صحيح", "error"); }
+    if (!(value >= 1 && value <= 10000000)) { custom.classList.add("invalid"); return toast(t("اكتب مبلغاً صحيحاً"), "error"); }
+    if (!isValidPhone(phone.input.value)) { phone.input.classList.add("invalid"); return toast(t("رقم الجوال غير صحيح"), "error"); }
     const name = oneLine(donor.input.value, 60) || "فاعل خير";
     const ph = toLatinDigits(phone.input.value).replace(/[^\d+]/g, "");
     saveCustomer({ phone: ph, ...(name !== "فاعل خير" ? { name } : {}) });
@@ -1186,7 +1199,7 @@ function openDonation(p) {
       `💚 *إشعار تبرع جديد #${no}*`, `🏛️ ${s.name}`, SEP,
       `👤 *المتبرع:* ${name}`, `📱 *الجوال:* ${ph}`, SEP,
       `🎯 *المبادرة:* ${it?.name || "تبرع عام"}`,
-      `💰 *المبلغ: ${money(value)}*`,
+      `💰 *المبلغ: ${moneyText(value)}*`,
       s.iban_number ? `🏦 *طريقة الدفع:* تحويل بنكي إلى ${s.iban_number}` : "🏦 *طريقة الدفع:* تحويل بنكي",
       SEP, "📎 سأرفق صورة إيصال التحويل في هذه المحادثة.", "جزاكم الله خيراً 🤲",
     ].join("\n"));
@@ -1201,34 +1214,34 @@ function openLegal(p) {
   const s = S.store;
   const c = customer();
   const today = tzParts(s.timezone, now()).ymd;
-  const sel = itemSelect(p, { allowGeneral: true, generalLabel: "غير محدد / أخرى" });
+  const sel = itemSelect(p, { allowGeneral: true, generalLabel: t("غير محدد / أخرى") });
   let kind = "office";
   const kindSeg = choices("lkind", [
-    { value: "office", icon: "🏢", label: "حضورية" }, { value: "remote", icon: "💻", label: "عن بُعد" }, { value: "contract", icon: "📄", label: "صياغة عقد" },
+    { value: "office", icon: "🏢", label: t("حضورية") }, { value: "remote", icon: "💻", label: t("عن بُعد") }, { value: "contract", icon: "📄", label: t("صياغة عقد") },
   ], kind, (v) => { kind = v; });
-  const brief = textField("نبذة مختصرة عن القضية / الطلب", { multiline: true, maxlength: "600", placeholder: "اكتب ملخصاً موجزاً دون تفاصيل حساسة..." }, "لا تكتب بيانات سرية هنا؛ سيتم التواصل معك لاستكمال التفاصيل.");
+  const brief = textField(t("نبذة مختصرة عن القضية / الطلب"), { multiline: true, maxlength: "600", placeholder: t("اكتب ملخصاً موجزاً دون تفاصيل حساسة...") }, t("لا تكتب بيانات سرية هنا؛ سيتم التواصل معك لاستكمال التفاصيل."));
   const date = h("input", { class: "input", type: "date", min: today });
   let period = "any";
   const f = nameAndPhone(c);
-  const sendBtn = h("button", { class: "btn btn-accent btn-lg btn-block", type: "button" }, "إرسال طلب الاستشارة عبر واتساب");
+  const sendBtn = h("button", { class: "btn btn-accent btn-lg btn-block", type: "button" }, t("إرسال طلب الاستشارة عبر واتساب"));
 
   const sheet = openSheet({
-    title: "حجز استشارة",
+    title: t("حجز استشارة"),
     className: "flow-sheet",
     body: [
-      sec("التخصص", sel),
-      sec("نوع الاستشارة", kindSeg),
+      sec(t("التخصص"), sel),
+      sec(t("نوع الاستشارة"), kindSeg),
       sec(null, brief.el),
-      sec("الوقت المناسب", date, periodChoices("lperiod", (v) => { period = v; })),
-      sec("بياناتك", f.name.el, f.phone.el),
+      sec(t("الوقت المناسب"), date, periodChoices("lperiod", (v) => { period = v; })),
+      sec(t("بياناتك"), f.name.el, f.phone.el),
     ],
     foot: sendBtn,
   });
-  bindCooldown(sendBtn, "إرسال طلب الاستشارة عبر واتساب");
+  bindCooldown(sendBtn, t("إرسال طلب الاستشارة عبر واتساب"));
 
   sendBtn.addEventListener("click", async () => {
     const b = multiLine(brief.input.value, 600);
-    if (b.length < 10) { brief.input.classList.add("invalid"); brief.input.focus(); return toast("اكتب نبذة مختصرة (10 أحرف على الأقل)", "error"); }
+    if (b.length < 10) { brief.input.classList.add("invalid"); brief.input.focus(); return toast(t("اكتب نبذة مختصرة (10 أحرف على الأقل)"), "error"); }
     const who = validateNamePhone(f);
     if (!who) return;
     saveCustomer({ name: who.name, phone: who.phone });
@@ -1240,9 +1253,9 @@ function openLegal(p) {
       const L = [`⚖️ *طلب استشارة جديد #${no}*`, `🏛️ ${s.name}`, SEP,
         `👤 *الاسم:* ${who.name}`, `📱 *الجوال:* ${who.phone}`, SEP,
         `📚 *التخصص:* ${it?.name || "غير محدد"}`, `🗂️ *نوع الاستشارة:* ${kindLabel}`,
-        `🗓️ *الوقت المناسب:* ${date.value ? fmtDateAr(date.value) + " — " : ""}${periodLabel}`, SEP,
+        `🗓️ *الوقت المناسب:* ${date.value ? fmtDateMsg(date.value) + " — " : ""}${periodLabel}`, SEP,
         `📝 *نبذة مختصرة:*`, b];
-      if (fee > 0) L.push(SEP, `💰 *رسوم الاستشارة: ${money(fee)}*`);
+      if (fee > 0) L.push(SEP, `💰 *رسوم الاستشارة: ${moneyText(fee)}*`);
       return L.join("\n");
     });
     if (ok) sheet.close();
@@ -1250,7 +1263,7 @@ function openLegal(p) {
 }
 
 /* =========================================================
-   PWA: "أضف للشاشة الرئيسية"
+   PWA: t("أضف للشاشة الرئيسية")
    ========================================================= */
 let deferredPrompt = null;
 const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
@@ -1272,11 +1285,11 @@ function maybeShowInstall() {
   if (Date.now() - (ls.get(dismissKey(), 0) || 0) < 7 * 86400000) return;
   if (!deferredPrompt && !isIOS()) return;
   const s = S.store;
-  const bar = h("div", { class: "sf-install", role: "region", "aria-label": "تثبيت التطبيق" },
+  const bar = h("div", { class: "sf-install", role: "region", "aria-label": t("تثبيت التطبيق") },
     s.logo_url ? h("img", { class: "app-ico", src: s.logo_url, alt: "" }) : h("div", { class: "app-ico", "aria-hidden": "true" }, initials(s.name)),
-    h("div", { class: "grow" }, h("b", { text: "أضف للشاشة الرئيسية لطلب أسرع" }), h("span", { text: "افتح المتجر كتطبيق بلمسة وحدة" })),
-    h("button", { class: "btn btn-primary btn-sm", type: "button", onClick: install }, "إضافة"),
-    h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-label": "إخفاء",
+    h("div", { class: "grow" }, h("b", { text: t("أضف للشاشة الرئيسية لطلب أسرع") }), h("span", { text: t("افتح المتجر كتطبيق بلمسة وحدة") })),
+    h("button", { class: "btn btn-primary btn-sm", type: "button", onClick: install }, t("إضافة")),
+    h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-label": t("إخفاء"),
       onClick: () => { ls.set(dismissKey(), Date.now()); fill(slot); } }, "✕"));
   fill(slot, bar);
 }
@@ -1291,10 +1304,10 @@ async function install() {
     return;
   }
   openSheet({
-    title: "إضافة للشاشة الرئيسية",
+    title: t("إضافة للشاشة الرئيسية"),
     body: h("ol", { class: "stack", style: { margin: "0", "padding-inline-start": "20px" } },
-      h("li", {}, "اضغط زر المشاركة ", h("b", {}, "⬆️"), " أسفل المتصفح (Safari)."),
-      h("li", {}, "اختر ", h("b", {}, "«إضافة إلى الشاشة الرئيسية»"), "."),
-      h("li", {}, "اضغط ", h("b", {}, "«إضافة»"), " — ستظهر أيقونة المتجر كتطبيق.")),
+      h("li", {}, t("اضغط زر المشاركة "), h("b", {}, "⬆️"), t(" أسفل المتصفح (Safari).")),
+      h("li", {}, t("اختر "), h("b", {}, t("«إضافة إلى الشاشة الرئيسية»")), "."),
+      h("li", {}, t("اضغط "), h("b", {}, t("«إضافة»")), t(" — ستظهر أيقونة المتجر كتطبيق."))),
   });
 }

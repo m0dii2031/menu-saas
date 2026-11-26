@@ -74,9 +74,9 @@ body.sf-body { background: var(--card); }
 
 /* ---------- البحث والأقسام ---------- */
 .sf-search { margin: 14px 16px 0; position: relative; }
-.sf-search input { width: 100%; height: 46px; border-radius: 14px; border: 0; background: var(--bg); padding: 0 42px 0 14px; outline: none; font-size: 15px; }
+.sf-search input { width: 100%; height: 46px; border-radius: 14px; border: 0; background: var(--bg); padding-block: 0; padding-inline: 42px 14px; outline: none; font-size: 15px; }
 .sf-search input:focus { box-shadow: 0 0 0 2px var(--primary); }
-.sf-search .i { position: absolute; top: 50%; right: 14px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.sf-search .i { position: absolute; top: 50%; inset-inline-start: 14px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 
 .sf-tabs { position: sticky; top: 0; z-index: 20; background: var(--card); border-bottom: 1px solid var(--border); margin-top: 10px; transition: top .2s ease; }
 .sf-tabs.under-bar { top: 56px; }
@@ -300,8 +300,21 @@ body.sf-body { background: var(--card); }
 .sf-promo.poster .sf-promo-body { position: relative; z-index: 1; align-items: flex-end; padding: 16px; }
 .sf-promo.poster .sf-promo-text { font-size: 22px; line-height: 1.35; max-width: 78%; }
 .sf-promo.poster .tag { background: #fff; color: var(--primary); transform: rotate(-3deg); font-size: 12px; padding: 4px 10px; margin-bottom: 8px; box-shadow: 0 3px 8px rgb(0 0 0 / .15); }
-.sticker { position: absolute; z-index: 1; top: 14px; left: 14px; width: 66px; height: 66px; border-radius: 50%; background: #ffd43b; color: #1f1a10; display: grid; place-items: center; text-align: center; font-weight: 900; font-size: 13px; line-height: 1.1; transform: rotate(-10deg); box-shadow: 0 6px 16px rgb(0 0 0 / .2); border: 3px dashed rgb(0 0 0 / .15); }
+.sticker { position: absolute; z-index: 1; top: 14px; inset-inline-end: 14px; width: 66px; height: 66px; border-radius: 50%; background: #ffd43b; color: #1f1a10; display: grid; place-items: center; text-align: center; font-weight: 900; font-size: 13px; line-height: 1.1; transform: rotate(-10deg); box-shadow: 0 6px 16px rgb(0 0 0 / .2); border: 3px dashed rgb(0 0 0 / .15); }
 .sticker b { display: block; font-size: 19px; }
 .promo-cta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .promo-cta .btn { background: #fff; color: #111; border-color: #fff; min-height: 40px; padding: 8px 18px; font-weight: 800; }
 .sf-promo.has-img.poster .sf-promo-text { font-size: 19px; }
+
+/* زر اللغة */
+.lang-btn { font-weight: 800; font-size: 14px; font-family: inherit; }
+
+/* الإنجليزية (LTR): العناوين بخط أعرض قليلاً */
+[dir="ltr"] .sf-title h1, [dir="ltr"] .p-title { letter-spacing: -.3px; }
+
+/* بيانات التاجر (أسماء/أوصاف) تأخذ اتجاهها من محتواها: عربي يمين، إنجليزي يسار — في الواجهتين */
+.item-name, .item-desc, .p-title, .p-desc, .sf-title h1, .sf-title .sub, .sf-promo-text, .fcard b, .sf-sec-title,
+.cat-circle span, .lcard h3, .lcard p, .opt-row .n, .cline .meta b, .cline .meta small, .sf-topbar b, .reorder .txt div {
+  unicode-bidi: plaintext; text-align: start;
+}
+.money, .item-price, .p-price, .pr, .fcard .p { white-space: nowrap; }

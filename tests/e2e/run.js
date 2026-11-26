@@ -107,7 +107,7 @@ async function gateway(route) {
 }
 
 function staticServer() {
-  const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".json": "application/json" };
+  const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".json": "application/json", ".woff2": "font/woff2" };
   return http.createServer((req, res) => {
     let p = decodeURIComponent(new URL(req.url, "http://x").pathname);
     if (p === "/") p = "/index.html";
@@ -340,6 +340,26 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   check("view not duplicated in same session", (await sql("select count(*)::int c from analytics_events where event_type='view'"))[0].c === 1);
   await shot(page, "11-store-order-home");
   await page.screenshot({ path: `${OUT}/11f-store-full.png`, fullPage: true });
+  const riyal = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const loaded = [...document.fonts].some((f) => f.family.replace(/"/g, "") === "SaudiRiyal" && f.status === "loaded");
+    return { loaded, inPrice: document.querySelector(".item-price")?.textContent.includes("\u20C1") };
+  });
+  check("prices use the official riyal sign with its font loaded", riyal.loaded && riyal.inPrice, JSON.stringify(riyal));
+  await page.locator(".sf-cover .lang-btn").click();
+  await page.locator(".hero-name").waitFor();
+  const en = await page.evaluate(() => ({ dir: document.documentElement.dir, lang: document.documentElement.lang, body: document.body.innerText }));
+  if (en.body.includes("الأقسام") || !en.body.includes("Categories")) console.log("EN BODY:", en.body.slice(0, 600).replace(/\n/g, " | "));
+  check("English switch: LTR + translated UI", en.dir === "ltr" && en.lang === "en" && en.body.includes("Categories") && en.body.includes("Picked for you") && !en.body.includes("الأقسام"), en.dir);
+  await shot(page, "11e-store-english");
+  await page.locator(".product", { hasText: "دجاج مقرمش" }).click();
+  await page.waitForTimeout(400);
+  check("English product sheet", (await page.locator(".sheet").innerText()).includes("Choose size / type"));
+  await shot(page, "12e-product-english");
+  await page.locator(".sheet .sheet-head .btn").click();
+  await page.locator(".sf-cover .lang-btn").click();
+  await page.locator(".hero-name").waitFor();
+  check("switch back to Arabic (RTL)", await page.evaluate(() => document.documentElement.dir === "rtl" && document.body.innerText.includes("الأقسام")));
 
   await page.locator(".product", { hasText: "برجر لحم" }).click();
   await page.locator(".sheet").waitFor();
@@ -373,7 +393,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   const waUrl = (await page.evaluate(() => window.__opened)).slice(-1)[0];
   console.log("\n----- WhatsApp message -----\n" + msg + "\n----------------------------");
   check("wa.me link to merchant number", waUrl.startsWith("https://wa.me/966501234567?text="));
-  const order = ["🧾 *طلب جديد #1001*", "👤 *الاسم:* محمد", "📱 *الجوال:*", "🚚 *نوع الطلب:* توصيل", "• الحي: النرجس", "1) *برجر لحم", "• الحجم: دبل (32 ر.س)", "• الإضافات: جبنة شيدر (+3 ر.س)", "• الكمية: 2", "• المجموع الفرعي: 70 ر.س", "2) *بطاطس*", "📝 *ملاحظات:* بدون بصل", "🧮 مجموع الأصناف: 81 ر.س", "🛵 رسوم التوصيل: 10 ر.س", "💰 *الإجمالي النهائي: 91 ر.س*", "💳 *طريقة الدفع:* نقداً عند الاستلام"];
+  const order = ["🧾 *طلب جديد #1001*", "👤 *الاسم:* محمد", "📱 *الجوال:*", "🚚 *نوع الطلب:* توصيل", "• الحي: النرجس", "1) *برجر لحم", "• الحجم: دبل (32 ريال)", "• الإضافات: جبنة شيدر (+3 ريال)", "• الكمية: 2", "• المجموع الفرعي: 70 ريال", "2) *بطاطس*", "📝 *ملاحظات:* بدون بصل", "🧮 مجموع الأصناف: 81 ريال", "🛵 رسوم التوصيل: 10 ريال", "💰 *الإجمالي النهائي: 91 ريال*", "💳 *طريقة الدفع:* نقداً عند الاستلام"];
   let pos = -1, inOrder = true;
   for (const part of order) { const i = msg.indexOf(part, pos + 1); if (i < 0 || i < pos) { inOrder = false; console.log("   missing/out of order:", part); } pos = Math.max(pos, i); }
   check("message contains all sections in required order", inOrder);
@@ -423,7 +443,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await shot(page, "16-booking-form");
   await page.getByText("إرسال طلب الحجز عبر واتساب").click(); await page.getByText("تم تجهيز طلبك").waitFor();
   const bm = await lastWa(page);
-  check("booking message", bm.includes("📅 *طلب حجز جديد #") && bm.includes("🌙 *المدة:* 3 ليلة") && bm.includes("💰 *الإجمالي: 1,950 ر.س*") && bm.includes("🚪 *تاريخ الخروج:*"));
+  check("booking message", bm.includes("📅 *طلب حجز جديد #") && bm.includes("🌙 *المدة:* 3 ليلة") && bm.includes("💰 *الإجمالي: 1,950 ريال*") && bm.includes("🚪 *تاريخ الخروج:*"));
   await page.close();
 
   const ie = await mk("itqan", "inquiry", "theme-realestate");
@@ -455,7 +475,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await shot(page, "20-charity-form");
   await page.getByText("إرسال إشعار التبرع عبر واتساب").click(); await page.getByText("تم تجهيز طلبك").waitFor();
   const cm = await lastWa(page);
-  check("charity message", cm.includes("💚 *إشعار تبرع جديد #") && cm.includes("🎯 *المبادرة:* كفالة يتيم") && cm.includes("💰 *المبلغ: 750 ر.س*") && cm.includes("فاعل خير"));
+  check("charity message", cm.includes("💚 *إشعار تبرع جديد #") && cm.includes("🎯 *المبادرة:* كفالة يتيم") && cm.includes("💰 *المبلغ: 750 ريال*") && cm.includes("فاعل خير"));
   await page.close();
 
   const lg = await mk("adala", "legal", "theme-legal");

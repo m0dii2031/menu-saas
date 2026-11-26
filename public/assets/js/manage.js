@@ -353,7 +353,7 @@ function itemRow(p) {
       h("div", { class: "pc-name", text: p.name }),
       meta.length ? h("div", { class: "pc-meta" }, meta) : null,
       h("div", { class: "pc-foot" },
-        h("div", { class: "pc-price" }, hasSizes ? h("span", { text: `من ${money(minSize)}` }) : [priceInp, h("span", { class: "small" }, "ر.س")]),
+        h("div", { class: "pc-price" }, hasSizes ? h("span", { text: `من ${money(minSize)}` }) : [priceInp, h("span", { class: "small" }, CONFIG.CURRENCY)]),
         h("label", { class: "pc-toggle" }, stateLbl, sw.el))),
     h("div", { class: "pc-actions" },
       h("button", { class: "rbtn", type: "button", "aria-label": "تعديل", onClick: () => productForm(p) }, "✏️"), del));
