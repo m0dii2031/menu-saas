@@ -369,6 +369,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await page.locator(".option", { hasText: "دبل" }).click();
   await page.locator(".option", { hasText: "جبنة شيدر" }).click();
   await page.locator('.sheet .qty button[aria-label="زيادة"]').click();
+  await page.locator(".sheet .note-input").fill("بدون مخلل");
   await shot(page, "12-store-product-sheet");
   check("add button shows computed total (32+3)*2=70", (await page.locator(".sheet-foot .btn").innerText()).includes("70"));
   await page.locator(".sheet-foot .btn").click();
@@ -393,7 +394,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   const waUrl = (await page.evaluate(() => window.__opened)).slice(-1)[0];
   console.log("\n----- WhatsApp message -----\n" + msg + "\n----------------------------");
   check("wa.me link to merchant number", waUrl.startsWith("https://wa.me/966501234567?text="));
-  const order = ["🧾 *طلب جديد #1001*", "👤 *الاسم:* محمد", "📱 *الجوال:*", "🚚 *نوع الطلب:* توصيل", "• الحي: النرجس", "1) *برجر لحم", "• الحجم: دبل (32 ريال)", "• الإضافات: جبنة شيدر (+3 ريال)", "• الكمية: 2", "• المجموع الفرعي: 70 ريال", "2) *بطاطس*", "📝 *ملاحظات:* بدون بصل", "🧮 مجموع الأصناف: 81 ريال", "🛵 رسوم التوصيل: 10 ريال", "💰 *الإجمالي النهائي: 91 ريال*", "💳 *طريقة الدفع:* نقداً عند الاستلام"];
+  const order = ["┐────── إشعار تأكيد الطلب 🛍️ ──────┌", "رقم الطلب: *#ORD-1001*", "🔷 *المنتجات:*", "• برجر لحم", "(دبل) ×2 — 70.00 ﷼", "   ➕ الإضافات: جبنة شيدر (+3.00 ﷼)", "   📝 ملاحظة: بدون مخلل", "• بطاطس ×1 — 11.00 ﷼", "👤 الاسم: محمد", "📍 العنوان: النرجس — شارع 12، فيلا 4", "📞 الجوال:", "📝 ملاحظات الطلب: بدون بصل", "💳 *تفاصيل الفاتورة:*", "• المنتجات: 81.00 ﷼", "• التوصيل: 10.00 ﷼", "• الإجمالي: *91.00 ﷼*", "• الدفع: عند الاستلام (نقداً)", "┘─────"];
   let pos = -1, inOrder = true;
   for (const part of order) { const i = msg.indexOf(part, pos + 1); if (i < 0 || i < pos) { inOrder = false; console.log("   missing/out of order:", part); } pos = Math.max(pos, i); }
   check("message contains all sections in required order", inOrder);
@@ -443,7 +444,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await shot(page, "16-booking-form");
   await page.getByText("إرسال طلب الحجز عبر واتساب").click(); await page.getByText("تم تجهيز طلبك").waitFor();
   const bm = await lastWa(page);
-  check("booking message", bm.includes("📅 *طلب حجز جديد #") && bm.includes("🌙 *المدة:* 3 ليلة") && bm.includes("💰 *الإجمالي: 1,950 ريال*") && bm.includes("🚪 *تاريخ الخروج:*"));
+  check("booking message", bm.includes("إشعار طلب حجز 📅") && bm.includes("#BK-") && bm.includes("• المدة: 3 ليلة") && bm.includes("• الإجمالي: *1,950.00 ﷼*") && bm.includes("• تاريخ الخروج:"));
   await page.close();
 
   const ie = await mk("itqan", "inquiry", "theme-realestate");
@@ -460,7 +461,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await shot(page, "18-inquiry-form");
   await page.getByText("إرسال الطلب عبر واتساب").click(); await page.getByText("تم تجهيز طلبك").waitFor();
   const im = await lastWa(page);
-  check("inquiry message", im.includes("🏢 *طلب حجز مبدئي #") && im.includes("فيلا حي الملقا") && im.includes("• المساحة: 450م²"));
+  check("inquiry message", im.includes("إشعار طلب حجز مبدئي 🏢") && im.includes("• فيلا حي الملقا") && im.includes("▫️ المساحة: 450م²"));
   await page.close();
 
   const cy = await mk("albir", "charity", "theme-charity", "iban_number=SA0380000000608010167519");
@@ -475,7 +476,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await shot(page, "20-charity-form");
   await page.getByText("إرسال إشعار التبرع عبر واتساب").click(); await page.getByText("تم تجهيز طلبك").waitFor();
   const cm = await lastWa(page);
-  check("charity message", cm.includes("💚 *إشعار تبرع جديد #") && cm.includes("🎯 *المبادرة:* كفالة يتيم") && cm.includes("💰 *المبلغ: 750 ريال*") && cm.includes("فاعل خير"));
+  check("charity message", cm.includes("إشعار تبرع 💚") && cm.includes("• المبادرة: كفالة يتيم") && cm.includes("• المبلغ: *750.00 ﷼*") && cm.includes("فاعل خير"));
   await page.close();
 
   const lg = await mk("adala", "legal", "theme-legal");
@@ -491,7 +492,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await shot(page, "22-legal-form");
   await page.getByText("إرسال طلب الاستشارة عبر واتساب").click(); await page.getByText("تم تجهيز طلبك").waitFor();
   const lm = await lastWa(page);
-  check("legal message", lm.includes("⚖️ *طلب استشارة جديد #") && lm.includes("🗂️ *نوع الاستشارة:* عن بُعد") && lm.includes("نزاع مع شريك"));
+  check("legal message", lm.includes("إشعار طلب استشارة ⚖️") && lm.includes("#LG-") && lm.includes("• النوع: عن بُعد") && lm.includes("نزاع مع شريك"));
   await page.close();
 
   /* ---------- 5) Closed / overnight hours / suspended ---------- */

@@ -122,9 +122,10 @@ export function money(n) {
   return `${fmtAmount(n)}\u00A0${CONFIG.CURRENCY}`;
 }
 
-/** مبلغ نصي لرسائل واتساب والنسخ: "25 ريال" */
+/** مبلغ لرسائل واتساب والنسخ: "25.00 ﷼" */
 export function moneyText(n) {
-  return `${fmtAmount(n)} ${CONFIG.CURRENCY_TEXT}`;
+  const v = (Math.round(num(n) * 100) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${v} ${CONFIG.CURRENCY_TEXT}`;
 }
 
 /** توحيد رقم الجوال لصيغة دولية بدون + (يدعم 05xxxxxxxx السعودية) */

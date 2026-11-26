@@ -6,7 +6,7 @@ export const CONFIG = {
   SUPABASE_ANON_KEY: "YOUR-ANON-OR-PUBLISHABLE-KEY",
   // رمز الريال السعودي الرسمي (U+20C1) — يُعرض عبر خط مستضاف داخل المنصة
   CURRENCY: "\u20C1",
-  // نص العملة في رسائل واتساب (قد لا يعرض واتساب الرمز الجديد على كل الأجهزة)
-  CURRENCY_TEXT: "ريال",
+  // رمز العملة في رسائل واتساب: ﷼ (U+FDFC) يعرضه واتساب على كل الأجهزة
+  CURRENCY_TEXT: "\uFDFC",
   ORDER_COOLDOWN_SECONDS: 30,
 };

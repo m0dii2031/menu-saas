@@ -850,7 +850,7 @@ function openCheckout() {
 
     const sub = cartSubtotal();
     const fee = st.type === "delivery" ? num(s.delivery_fee) : 0;
-    const payLabel = { cash: "نقداً عند الاستلام", card: "شبكة / مدى عند الاستلام", transfer: "تحويل بنكي" }[st.pay];
+    const payLabel = { cash: "عند الاستلام (نقداً)", card: "عند الاستلام (شبكة / مدى)", transfer: "تحويل بنكي" }[st.pay];
     const note = multiLine(notes.input.value, 400);
     const items = S.cart.map((l) => ({ n: l.name.slice(0, 60), s: l.size?.name || null, q: l.qty, t: lineUnit(l) * l.qty }));
 
@@ -864,43 +864,41 @@ function openCheckout() {
   });
 }
 
-const SEP = "━━━━━━━━━━━━";
+const SEP = "━━━━━━━━━━━━━━━━";
+/** إطار الرسالة (يُعرض من اليمين لليسار داخل واتساب) */
+const frameTop = (title) => `┐────── ${title} ──────┌`;
+const FRAME_BOTTOM = "┘─────────────────────└";
 
 function buildOrderMessage(no, d) {
   const L = [];
-  L.push(`🧾 *طلب جديد #${no}*`);
-  L.push(`🏪 ${S.store.name}`);
-  L.push(SEP);
-  L.push(`👤 *الاسم:* ${d.name}`);
-  L.push(`📱 *الجوال:* ${d.phone}`);
-  L.push(`🚚 *نوع الطلب:* ${d.type === "delivery" ? "توصيل" : "استلام من المحل"}`);
-  if (d.type === "delivery") {
-    L.push(SEP);
-    L.push("📍 *بيانات الموقع:*");
-    if (d.district) L.push(`• الحي: ${d.district}`);
-    if (d.address) L.push(`• العنوان: ${d.address}`);
-    if (d.gps) L.push(`• الموقع على الخريطة: ${d.gps}`);
-  }
-  L.push(SEP);
-  L.push("🛒 *الأصناف:*");
-  S.cart.forEach((l, i) => {
-    L.push(`${i + 1}) *${l.name}*`);
-    if (l.size) L.push(`   • الحجم: ${l.size.name} (${moneyText(l.size.price)})`);
-    else L.push(`   • السعر: ${moneyText(l.base)}`);
-    if (l.addons.length) L.push(`   • الإضافات: ${l.addons.map((a) => `${a.name} (+${moneyText(a.price)})`).join("، ")}`);
-    if (l.note) L.push(`   • ملاحظة: ${l.note}`);
-    L.push(`   • الكمية: ${l.qty}`);
-    L.push(`   • المجموع الفرعي: ${moneyText(lineUnit(l) * l.qty)}`);
+  L.push(frameTop("إشعار تأكيد الطلب 🛍️"));
+  L.push(`رقم الطلب: *#ORD-${no}*`);
+  L.push(`🏪 المتجر: ${S.store.name}`);
+  L.push("");
+  L.push("🔷 *المنتجات:*");
+  S.cart.forEach((l) => {
+    L.push(`• ${l.name}${l.size ? ` (${l.size.name})` : ""} ×${l.qty} — ${moneyText(lineUnit(l) * l.qty)}`);
+    if (l.addons.length) L.push(`   ➕ الإضافات: ${l.addons.map((x) => `${x.name} (+${moneyText(x.price)})`).join("، ")}`);
+    if (l.note) L.push(`   📝 ملاحظة: ${l.note}`);
   });
-  if (d.note) {
-    L.push(SEP);
-    L.push(`📝 *ملاحظات:* ${d.note}`);
+  L.push("");
+  L.push(`👤 الاسم: ${d.name}`);
+  if (d.type === "delivery") {
+    const addr = [d.district, d.address].filter(Boolean).join(" — ");
+    if (addr) L.push(`📍 العنوان: ${addr}`);
+    if (d.gps) L.push(`🗺️ الموقع: ${d.gps}`);
+  } else {
+    L.push("📍 الاستلام: من المحل");
   }
+  L.push(`📞 الجوال: ${d.phone}`);
+  if (d.note) L.push(`📝 ملاحظات الطلب: ${d.note}`);
   L.push(SEP);
-  L.push(`🧮 مجموع الأصناف: ${moneyText(d.sub)}`);
-  if (d.type === "delivery") L.push(`🛵 رسوم التوصيل: ${d.fee ? moneyText(d.fee) : "مجاناً"}`);
-  L.push(`💰 *الإجمالي النهائي: ${moneyText(d.sub + d.fee)}*`);
-  L.push(`💳 *طريقة الدفع:* ${d.payLabel}`);
+  L.push("💳 *تفاصيل الفاتورة:*");
+  L.push(`• المنتجات: ${moneyText(d.sub)}`);
+  if (d.type === "delivery") L.push(`• التوصيل: ${d.fee ? moneyText(d.fee) : "مجاناً"}`);
+  L.push(`• الإجمالي: *${moneyText(d.sub + d.fee)}*`);
+  L.push(`• الدفع: ${d.payLabel}`);
+  L.push(FRAME_BOTTOM);
   return L.join("\n");
 }
 
@@ -1069,14 +1067,13 @@ function openBooking(p) {
     const g = Math.floor(num(guests.input.value));
     const note = multiLine(notes.input.value, 400);
     const ok = await submitToWhatsApp(sendBtn, total, [{ n: it.name.slice(0, 60), q: nights, t: total }], (no) => {
-      const L = [`📅 *طلب حجز جديد #${no}*`, `🏪 ${s.name}`, SEP,
-        `👤 *الاسم:* ${who.name}`, `📱 *الجوال:* ${who.phone}`, SEP,
-        `🏡 *الوحدة:* ${it.name}`, `📆 *تاريخ الدخول:* ${fmtDateMsg(date.value)}`,
-        `🌙 *المدة:* ${nights} ${unit}`];
-      if (unit === "ليلة" || unit === "يوم") L.push(`🚪 *تاريخ الخروج:* ${fmtDateMsg(addDays(date.value, nights))}`);
-      if (g > 0) L.push(`👥 *عدد الأشخاص:* ${g}`);
-      if (note) L.push(SEP, `📝 *ملاحظات:* ${note}`);
-      L.push(SEP, `💵 السعر / ${unit}: ${moneyText(it.price)}`, `💰 *الإجمالي: ${moneyText(total)}*`);
+      const L = [frameTop("إشعار طلب حجز 📅"), `رقم الطلب: *#BK-${no}*`, `🏪 ${s.name}`, "",
+        "🔷 *تفاصيل الحجز:*", `• الوحدة: ${it.name}`, `• تاريخ الدخول: ${fmtDateMsg(date.value)}`, `• المدة: ${nights} ${unit}`];
+      if (unit === "ليلة" || unit === "يوم") L.push(`• تاريخ الخروج: ${fmtDateMsg(addDays(date.value, nights))}`);
+      if (g > 0) L.push(`• عدد الأشخاص: ${g}`);
+      L.push("", `👤 الاسم: ${who.name}`, `📞 الجوال: ${who.phone}`);
+      if (note) L.push(`📝 ملاحظات: ${note}`);
+      L.push(SEP, "💳 *تفاصيل الفاتورة:*", `• السعر / ${unit}: ${moneyText(it.price)}`, `• الإجمالي: *${moneyText(total)}*`, FRAME_BOTTOM);
       return L.join("\n");
     });
     if (ok) sheet.close();
@@ -1121,15 +1118,16 @@ function openInquiry(p) {
     const periodLabel = { am: "صباحاً", pm: "مساءً", any: "أي وقت" }[period];
     const note = multiLine(notes.input.value, 500);
     const ok = await submitToWhatsApp(sendBtn, it ? num(it.price) : 0, it ? [{ n: it.name.slice(0, 60), q: 1, t: num(it.price) }] : [], (no) => {
-      const L = [`🏢 *طلب ${kindLabel} #${no}*`, `🏪 ${s.name}`, SEP,
-        `👤 *الاسم:* ${who.name}`, `📱 *الجوال:* ${who.phone}`, `📋 *نوع الطلب:* ${kindLabel}`, SEP];
+      const L = [frameTop(`إشعار طلب ${kindLabel} 🏢`), `رقم الطلب: *#RQ-${no}*`, `🏪 ${s.name}`, "", "🔷 *العرض:*"];
       if (it) {
-        L.push(`🏠 *العرض:* ${it.name}`);
-        if (num(it.price) > 0) L.push(`💵 *السعر المعلن:* ${moneyText(it.price)}${it.options_json?.unit ? " / " + it.options_json.unit : ""}`);
-        for (const sp of (it.options_json?.specs || []).slice(0, 6)) L.push(`• ${sp.label}: ${sp.value}`);
-      } else L.push("🏠 *العرض:* استفسار عام");
-      L.push(SEP, `🗓️ *الموعد المفضل:* ${date.value ? fmtDateMsg(date.value) + " — " : ""}${periodLabel}`);
-      if (note) L.push(`📝 *تفاصيل:* ${note}`);
+        L.push(`• ${it.name}`);
+        if (num(it.price) > 0) L.push(`• السعر المعلن: ${moneyText(it.price)}${it.options_json?.unit ? " / " + it.options_json.unit : ""}`);
+        for (const sp of (it.options_json?.specs || []).slice(0, 6)) L.push(`   ▫️ ${sp.label}: ${sp.value}`);
+      } else L.push("• استفسار عام");
+      L.push("", `📋 نوع الطلب: ${kindLabel}`, `🗓️ الموعد المفضل: ${date.value ? fmtDateMsg(date.value) + " — " : ""}${periodLabel}`,
+        `👤 الاسم: ${who.name}`, `📞 الجوال: ${who.phone}`);
+      if (note) L.push(`📝 تفاصيل: ${note}`);
+      L.push(FRAME_BOTTOM);
       return L.join("\n");
     });
     if (ok) sheet.close();
@@ -1196,12 +1194,11 @@ function openDonation(p) {
     saveCustomer({ phone: ph, ...(name !== "فاعل خير" ? { name } : {}) });
     const it = S.products.find((x) => x.id === sel.value);
     const ok = await submitToWhatsApp(sendBtn, value, [{ n: (it?.name || "تبرع عام").slice(0, 60), q: 1, t: value }], (no) => [
-      `💚 *إشعار تبرع جديد #${no}*`, `🏛️ ${s.name}`, SEP,
-      `👤 *المتبرع:* ${name}`, `📱 *الجوال:* ${ph}`, SEP,
-      `🎯 *المبادرة:* ${it?.name || "تبرع عام"}`,
-      `💰 *المبلغ: ${moneyText(value)}*`,
-      s.iban_number ? `🏦 *طريقة الدفع:* تحويل بنكي إلى ${s.iban_number}` : "🏦 *طريقة الدفع:* تحويل بنكي",
-      SEP, "📎 سأرفق صورة إيصال التحويل في هذه المحادثة.", "جزاكم الله خيراً 🤲",
+      frameTop("إشعار تبرع 💚"), `رقم الإشعار: *#DN-${no}*`, `🏛️ ${s.name}`, "",
+      "🔷 *التبرع:*", `• المبادرة: ${it?.name || "تبرع عام"}`, `• المبلغ: *${moneyText(value)}*`,
+      `• الدفع: ${s.iban_number ? `تحويل بنكي إلى ${s.iban_number}` : "تحويل بنكي"}`, "",
+      `👤 المتبرع: ${name}`, `📞 الجوال: ${ph}`, SEP,
+      "📎 سأرفق صورة إيصال التحويل في هذه المحادثة.", "جزاكم الله خيراً 🤲", FRAME_BOTTOM,
     ].join("\n"));
     if (ok) sheet.close();
   });
@@ -1250,12 +1247,12 @@ function openLegal(p) {
     const periodLabel = { am: "صباحاً", pm: "مساءً", any: "أي وقت" }[period];
     const fee = it ? num(it.price) : 0;
     const ok = await submitToWhatsApp(sendBtn, fee, it ? [{ n: it.name.slice(0, 60), q: 1, t: fee }] : [], (no) => {
-      const L = [`⚖️ *طلب استشارة جديد #${no}*`, `🏛️ ${s.name}`, SEP,
-        `👤 *الاسم:* ${who.name}`, `📱 *الجوال:* ${who.phone}`, SEP,
-        `📚 *التخصص:* ${it?.name || "غير محدد"}`, `🗂️ *نوع الاستشارة:* ${kindLabel}`,
-        `🗓️ *الوقت المناسب:* ${date.value ? fmtDateMsg(date.value) + " — " : ""}${periodLabel}`, SEP,
-        `📝 *نبذة مختصرة:*`, b];
-      if (fee > 0) L.push(SEP, `💰 *رسوم الاستشارة: ${moneyText(fee)}*`);
+      const L = [frameTop("إشعار طلب استشارة ⚖️"), `رقم الطلب: *#LG-${no}*`, `🏛️ ${s.name}`, "",
+        "🔷 *الاستشارة:*", `• التخصص: ${it?.name || "غير محدد"}`, `• النوع: ${kindLabel}`,
+        `• الوقت المناسب: ${date.value ? fmtDateMsg(date.value) + " — " : ""}${periodLabel}`, "",
+        "📝 *نبذة مختصرة:*", b, "", `👤 الاسم: ${who.name}`, `📞 الجوال: ${who.phone}`];
+      if (fee > 0) L.push(SEP, "💳 *تفاصيل الفاتورة:*", `• رسوم الاستشارة: *${moneyText(fee)}*`);
+      L.push(FRAME_BOTTOM);
       return L.join("\n");
     });
     if (ok) sheet.close();
