@@ -126,7 +126,15 @@ async function newPage(browser, errors) {
   await ctx.route("https://test.supabase.co/**", gateway);
   await ctx.route("https://cdn.jsdelivr.net/npm/@supabase/**", (r) => r.fulfill({ contentType: "text/javascript", body: fs.readFileSync(`${NM}/@supabase/supabase-js/dist/umd/supabase.js`) }));
   await ctx.route("https://cdn.jsdelivr.net/npm/qrcode-generator**", (r) => r.fulfill({ contentType: "text/javascript", body: fs.readFileSync(`${NM}/qrcode-generator/qrcode.js`) }));
-  await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: "" }));
+  // Google Fonts محجوب في بيئة الاختبار: نخدم نفس ملفات Almarai محلياً (من @fontsource/almarai) إن وُجدت
+  const FONT_DIR = `${NM}/@fontsource/almarai/files`;
+  const hasFont = fs.existsSync(FONT_DIR);
+  await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: hasFont
+    ? [300, 400, 700, 800].map((w) => `@font-face{font-family:"Almarai";font-weight:${w};font-display:swap;src:url(https://fonts.gstatic.com/almarai/${w}.woff2) format("woff2")}`).join("\n") : "" }));
+  await ctx.route("https://fonts.gstatic.com/almarai/**", (r) => {
+    const w = r.request().url().match(/(\d+)\.woff2/)[1];
+    r.fulfill({ contentType: "font/woff2", body: fs.readFileSync(`${FONT_DIR}/almarai-arabic-${w}-normal.woff2`) });
+  });
   await ctx.addInitScript(() => {
     window.__opened = [];
     window.open = (u) => { window.__opened.push(u); return { opener: null, location: { set href(v) { window.__opened.push(v); } } }; };

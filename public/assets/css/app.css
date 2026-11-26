@@ -17,7 +17,7 @@
   --warning: #d97706;
   --shadow: 0 1px 2px rgb(0 0 0 / .04), 0 6px 20px rgb(0 0 0 / .06);
   --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
-  --font: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+  --font: "Almarai", "Segoe UI", Tahoma, system-ui, sans-serif;
   color-scheme: light;
 }
 
