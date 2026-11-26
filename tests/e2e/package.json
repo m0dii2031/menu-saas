@@ -1,0 +1,11 @@
+{
+  "name": "menu-saas-e2e",
+  "private": true,
+  "scripts": { "test": "node run.js" },
+  "dependencies": {
+    "@supabase/supabase-js": "2.45.4",
+    "pg": "8.13.1",
+    "playwright": "1.49.1",
+    "qrcode-generator": "1.4.4"
+  }
+}

@@ -1,0 +1,10 @@
+# إعدادات Edge Functions — التحقق من الهوية يتم داخل الدوال نفسها
+# (رمز جلسة التاجر)، و manifest يُجلب عبر <link> بدون ترويسات.
+[functions.manifest]
+verify_jwt = false
+
+[functions.sign-upload]
+verify_jwt = false
+
+[functions.vision-menu]
+verify_jwt = false
