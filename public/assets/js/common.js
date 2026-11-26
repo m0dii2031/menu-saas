@@ -138,10 +138,10 @@ export function toast(msg, type = "") {
 }
 
 /* ---------------- النوافذ السفلية ---------------- */
-export function openSheet({ title, body, foot, onClose, label }) {
+export function openSheet({ title, body, foot, onClose, label, className = "" }) {
   const prevFocus = document.activeElement;
   const closeBtn = h("button", { class: "btn btn-ghost icon-btn", "aria-label": "إغلاق", type: "button" }, "✕");
-  const sheet = h("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": label || title || "" },
+  const sheet = h("div", { class: `sheet ${className}`.trim(), role: "dialog", "aria-modal": "true", "aria-label": label || title || "" },
     h("div", { class: "sheet-head" }, h("h3", { text: title || "" }), closeBtn),
     h("div", { class: "sheet-body" }, body),
     foot ? h("div", { class: "sheet-foot" }, foot) : null,

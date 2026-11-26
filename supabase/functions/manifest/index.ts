@@ -3,17 +3,17 @@ import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { appUrl, corsHeaders } from "../_shared/common.ts";
 
 const THEME_COLORS: Record<string, [string, string]> = {
-  "theme-restaurant": ["#ea580c", "#fff7ed"],
-  "theme-cafe": ["#b45309", "#181512"],
-  "theme-pharmacy": ["#059669", "#f0fdf4"],
-  "theme-store": ["#2563eb", "#f8fafc"],
-  "theme-service": ["#0284c7", "#f0f9ff"],
-  "theme-chalet": ["#0f766e", "#f0fdfa"],
-  "theme-realestate": ["#1e3a8a", "#f8fafc"],
-  "theme-bakery": ["#be185d", "#fdf2f8"],
-  "theme-charity": ["#0d9488", "#f0fdfa"],
-  "theme-legal": ["#1e293b", "#f8fafc"],
-  "theme-general": ["#18181b", "#fafafa"],
+  "theme-restaurant": ["#ea580c", "#ffffff"],
+  "theme-cafe": ["#c2741f", "#100d0b"],
+  "theme-pharmacy": ["#059669", "#ffffff"],
+  "theme-store": ["#2563eb", "#ffffff"],
+  "theme-service": ["#0284c7", "#ffffff"],
+  "theme-chalet": ["#0f766e", "#ffffff"],
+  "theme-realestate": ["#1e3a8a", "#ffffff"],
+  "theme-bakery": ["#be185d", "#ffffff"],
+  "theme-charity": ["#0d9488", "#ffffff"],
+  "theme-legal": ["#1e293b", "#ffffff"],
+  "theme-general": ["#18181b", "#ffffff"],
 };
 
 const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {

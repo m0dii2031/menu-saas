@@ -2,7 +2,7 @@
 // لا يتم تخزين أي طلبات Supabase (بيانات حية دائماً).
 const VERSION = "menu-v1";
 const SHELL = [
-  "/", "/index.html", "/assets/css/app.css", "/assets/js/config.js", "/assets/js/common.js",
+  "/", "/index.html", "/assets/css/app.css", "/assets/css/store.css", "/assets/js/config.js", "/assets/js/common.js",
   "/assets/js/store.js", "/assets/icons/icon-192.png", "/assets/icons/icon-512.png",
 ];
 

@@ -22,17 +22,17 @@
 }
 
 /* ---------- القوالب ---------- */
-.theme-restaurant { --primary:#ea580c; --bg:#fff7ed; --card:#fff; --border:#fed7aa; --text:#431407; --muted:#9a5b3c; --radius:16px; }
-.theme-cafe       { --primary:#b45309; --bg:#181512; --card:#221d19; --border:#3a312a; --text:#f5ede4; --muted:#b5a597; --radius:16px; --shadow:0 6px 24px rgb(0 0 0 / .35); color-scheme: dark; }
-.theme-pharmacy   { --primary:#059669; --bg:#f0fdf4; --card:#fff; --border:#bbf7d0; --text:#052e16; --muted:#4b6b58; --radius:14px; }
-.theme-store      { --primary:#2563eb; --bg:#f8fafc; --card:#fff; --border:#dbe3ee; --text:#0f172a; --muted:#64748b; --radius:12px; }
-.theme-service    { --primary:#0284c7; --bg:#f0f9ff; --card:#fff; --border:#bae6fd; --text:#082f49; --muted:#4f6b80; --radius:14px; }
-.theme-chalet     { --primary:#0f766e; --bg:#f0fdfa; --card:#fff; --border:#c7ece6; --text:#042f2e; --muted:#4d6f6b; --radius:20px; }
-.theme-realestate { --primary:#1e3a8a; --bg:#f8fafc; --card:#fff; --border:#d6dce8; --text:#0f172a; --muted:#5b6478; --radius:10px; }
-.theme-bakery     { --primary:#be185d; --bg:#fdf2f8; --card:#fff; --border:#fbcfe8; --text:#500724; --muted:#8a4d68; --radius:18px; }
-.theme-charity    { --primary:#0d9488; --bg:#f0fdfa; --card:#fff; --border:#c3ebe5; --text:#042f2e; --muted:#4b6e6a; --radius:16px; }
-.theme-legal      { --primary:#1e293b; --accent:#b45309; --bg:#f8fafc; --card:#fff; --border:#dfe3ea; --text:#0f172a; --muted:#5b6474; --radius:10px; }
-.theme-general    { --primary:#18181b; --bg:#fafafa; --card:#fff; --border:#e4e4e7; --text:#18181b; --muted:#71717a; --radius:14px; }
+.theme-restaurant { --primary:#ea580c; --bg:#f6f5f3; --card:#fff; --border:#ecebe8; --text:#1c1917; --muted:#78716c; --radius:16px; }
+.theme-cafe       { --primary:#c2741f; --bg:#100d0b; --card:#1d1916; --border:#2e2722; --text:#f5ede4; --muted:#a89a8c; --radius:16px; --shadow:0 6px 24px rgb(0 0 0 / .35); color-scheme: dark; }
+.theme-pharmacy   { --primary:#059669; --bg:#f4f6f5; --card:#fff; --border:#e6ebe8; --text:#0f1f17; --muted:#64746b; --radius:14px; }
+.theme-store      { --primary:#2563eb; --bg:#f4f5f8; --card:#fff; --border:#e5e8ef; --text:#0f172a; --muted:#64748b; --radius:14px; }
+.theme-service    { --primary:#0284c7; --bg:#f3f6f8; --card:#fff; --border:#e3e9ee; --text:#0b2233; --muted:#5f7282; --radius:14px; }
+.theme-chalet     { --primary:#0f766e; --bg:#f3f6f5; --card:#fff; --border:#e2eae8; --text:#0b2422; --muted:#5d716e; --radius:20px; }
+.theme-realestate { --primary:#1e3a8a; --bg:#f4f5f8; --card:#fff; --border:#e3e6ee; --text:#0f172a; --muted:#5b6478; --radius:10px; }
+.theme-bakery     { --primary:#be185d; --bg:#f8f4f6; --card:#fff; --border:#efe6ea; --text:#2a0f1b; --muted:#80606e; --radius:18px; }
+.theme-charity    { --primary:#0d9488; --bg:#f3f6f6; --card:#fff; --border:#e2eaea; --text:#0b2424; --muted:#5b6e6d; --radius:16px; }
+.theme-legal      { --primary:#1e293b; --accent:#b45309; --bg:#f4f5f7; --card:#fff; --border:#e4e7ec; --text:#0f172a; --muted:#5b6474; --radius:10px; }
+.theme-general    { --primary:#18181b; --bg:#f4f4f5; --card:#fff; --border:#e7e7ea; --text:#18181b; --muted:#71717a; --radius:14px; }
 
 /* ---------- الأساس ---------- */
 *, *::before, *::after { box-sizing: border-box; }

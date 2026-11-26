@@ -139,6 +139,17 @@ async function newPage(browser, errors) {
 }
 
 const overflowBad = [], badText = [];
+async function seedImage(page, key, emoji, c1, c2, w = 600, h = 600) {
+  const b64 = await page.evaluate(([emoji, c1, c2, w, h]) => {
+    const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d");
+    const g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, c1); g.addColorStop(1, c2); x.fillStyle = g; x.fillRect(0, 0, w, h);
+    x.fillStyle = "rgba(255,255,255,.18)"; x.beginPath(); x.arc(w * .5, h * .55, Math.min(w, h) * .36, 0, 7); x.fill();
+    x.font = `${Math.min(w, h) * .46}px serif`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(emoji, w / 2, h * .55);
+    return c.toDataURL("image/png").split(",")[1];
+  }, [emoji, c1, c2, w, h]);
+  uploads.set(key, { buf: Buffer.from(b64, "base64"), type: "image/png" });
+  return `https://test.supabase.co/storage/v1/object/public/media/${key}`;
+}
 const shot = async (page, name) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, window.visualViewport ? Math.round(visualViewport.width) : innerWidth]); if (w[0] > 390 + 1) overflowBad.push(`${name}:${w[0]}`); const t = await page.evaluate(() => document.body.innerText); const m = t.match(/\b(null|undefined|NaN)\b/); if (m) badText.push(`${name}:${m[0]}`); return page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false }); };
 const lastWa = async (page) => { const u = (await page.evaluate(() => window.__opened)).pop(); return u ? decodeURIComponent(new URL(u).searchParams.get("text")) : null; };
 
@@ -290,6 +301,23 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   /* ---------- 3) Customer (order mode) ---------- */
   console.log("\n[Customer — order]");
   page = await newPage(browser, errors);
+  await page.goto(`${BASE}/?store=nope`);
+  const [{ sid: rid }] = await sql("select id sid from stores where slug='test-rest'");
+  const IMG = {};
+  for (const [k, e, a, b] of [["burger", "🍔", "#f59e0b", "#b45309"], ["fries", "🍟", "#fcd34d", "#ea580c"], ["karak", "☕", "#d6a77a", "#7c4a24"], ["juice", "🍊", "#fdba74", "#f97316"],
+    ["chicken", "🍗", "#fbbf24", "#c2410c"], ["salad", "🥗", "#86efac", "#15803d"], ["shake", "🥤", "#f9a8d4", "#db2777"], ["wrap", "🌯", "#fde68a", "#a16207"]]) IMG[k] = await seedImage(page, `seed/${k}.png`, e, a, b);
+  const cover = await seedImage(page, "seed/cover.png", "🍔🍟🥤", "#7c2d12", "#ea580c", 1200, 520);
+  const logo = await seedImage(page, "seed/logo.png", "🔥", "#111827", "#374151", 400, 400);
+  await sql("update stores set cover_url=$1, logo_url=$2, business_type='برجر ومشويات' where id=$3", [cover, logo, rid]);
+  await sql("update products set image_url=$1 where name like 'برجر لحم%'", [IMG.burger]);
+  await sql("update products set image_url=$1, description='بطاطس ذهبية مقرمشة مع رشة ملح البحر' where name='بطاطس'", [IMG.fries]);
+  await sql("update products set image_url=$1 where name='شاي كرك'", [IMG.karak]);
+  await sql("update products set image_url=$1 where name='عصير برتقال'", [IMG.juice]);
+  await sql(`insert into products (store_id,category,name,description,price,image_url,options_json,sort_order) values
+    ($1,'وجبات','دجاج مقرمش','قطع دجاج متبلة بخلطة البيت مع صوص الثوم',26,$2,'{"sizes":[{"name":"4 قطع","price":26},{"name":"8 قطع","price":44}]}',3),
+    ($1,'وجبات','تورتيلا الدجاج','دجاج مشوي، خضار طازجة، صوص رانش',19,$3,'{}',4),
+    ($1,'مقبلات','سلطة سيزر','خس روماني، بارميزان، خبز محمص',17,$4,'{}',6),
+    ($1,'مشروبات','ميلك شيك فراولة','',15,$5,'{"sizes":[{"name":"وسط","price":15},{"name":"كبير","price":19}]}',9)`, [rid, IMG.chicken, IMG.wrap, IMG.salad, IMG.shake]);
   await page.goto(`${BASE}/?store=test-rest`);
   await page.locator(".hero-name").waitFor();
   check("XSS text rendered as text, no <img> injected", await page.evaluate(() => !document.querySelector('.product img[src="x"]') && [...document.querySelectorAll(".product-name")].some((e) => e.textContent.includes("<img"))));
@@ -301,11 +329,12 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await page.reload(); await page.locator(".hero-name").waitFor();
   check("view not duplicated in same session", (await sql("select count(*)::int c from analytics_events where event_type='view'"))[0].c === 1);
   await shot(page, "11-store-order-home");
+  await page.screenshot({ path: `${OUT}/11f-store-full.png`, fullPage: true });
 
   await page.locator(".product", { hasText: "برجر لحم" }).click();
   await page.locator(".sheet").waitFor();
-  await page.getByText("اختر الحجم / النوع أولاً").click();
-  check("size is mandatory before add", await page.getByText("الرجاء اختيار الحجم").isVisible());
+  await page.locator(".sheet-foot .btn", { hasText: "اختر الحجم أولاً" }).click();
+  check("size is mandatory before add", await page.getByText("الرجاء اختيار الحجم").isVisible() && await page.locator(".sheet").count() === 1);
   await page.locator(".option", { hasText: "دبل" }).click();
   await page.locator(".option", { hasText: "جبنة شيدر" }).click();
   await page.locator('.sheet .qty button[aria-label="زيادة"]').click();
@@ -322,8 +351,8 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   check("delivery blocked without district/GPS", await page.getByText("اكتب اسم الحي أو حدّد موقعك").isVisible() && (await page.evaluate(() => window.__opened.length)) === 0);
   await page.locator('.sheet label:has-text("الحي") input').fill("النرجس");
   await page.locator('.sheet label:has-text("العنوان التفصيلي") input').fill("شارع 12، فيلا 4");
-  await page.locator(".sheet .segmented >> text=🏦 تحويل").click().catch(() => {});
-  await page.locator(".sheet .segmented >> text=💵 نقداً").click();
+  await page.locator(".sheet .pay-row", { hasText: "تحويل بنكي" }).click();
+  await page.locator(".sheet .pay-row", { hasText: "نقداً عند الاستلام" }).click();
   await page.locator(".sheet textarea").fill("بدون بصل");
   await shot(page, "13-store-checkout");
   await page.getByText("إرسال الطلب عبر واتساب").click();
@@ -347,7 +376,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await page.locator(".cta-bar .btn").click();
   check("customer data auto-filled from localStorage", (await page.locator('.sheet label:has-text("الحي") input').inputValue()) === "النرجس");
   check("cooldown blocks rapid resend", /انتظر \d+ ثانية/.test(await page.locator(".sheet-foot .btn").innerText()));
-  await page.locator(".sheet .segmented >> text=🏃 استلام من المحل").click();
+  await page.locator(".sheet .choice >> text=استلام من المحل").click();
   await shot(page, "14b-store-pickup");
   check("pickup hides delivery fee & address", !(await page.locator(".summary").innerText()).includes("رسوم التوصيل") && await page.locator('.sheet label:has-text("الحي") input').isHidden());
   await page.close();
@@ -364,6 +393,11 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
     ($1,'شاليهات','شاليه الياسمين','مسبح خاص، ملعب، جلسات خارجية',650,'{"unit":"ليلة","specs":[{"label":"المساحة","value":"800م"},{"label":"غرف النوم","value":"3"},{"label":"المسبح","value":"مدفأ"}]}'),
     ($1,'استراحات','استراحة الريم','مناسبة للعائلات',400,'{"unit":"ليلة","specs":[{"label":"السعة","value":"40 شخص"}]}')`, [ch]);
   page = await newPage(browser, errors);
+  await page.goto(`${BASE}/?store=nope`);
+  const chImgs = [await seedImage(page, "seed/ch1.png", "🏊", "#5eead4", "#0f766e", 900, 600), await seedImage(page, "seed/ch2.png", "🌴", "#99f6e4", "#115e59", 900, 600)];
+  await sql("update products set image_url=$1, gallery_json=$2 where store_id=$3 and name='شاليه الياسمين'", [chImgs[0], JSON.stringify([chImgs[1]]), ch]);
+  await sql("update products set image_url=$1 where store_id=$2 and name='استراحة الريم'", [await seedImage(page, "seed/ch3.png", "🏡", "#a7f3d0", "#047857", 900, 600), ch]);
+  await sql("update stores set cover_url=$1 where id=$2", [await seedImage(page, "seed/chc.png", "🌅", "#134e4a", "#14b8a6", 1200, 520), ch]);
   await page.goto(`${BASE}/?store=oasis`); await page.locator(".listing").first().waitFor();
   await shot(page, "15-booking-home");
   await page.locator(".listing").first().click(); await page.getByText("احجز هذه الوحدة").click();
@@ -380,10 +414,12 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   const ie = await mk("itqan", "inquiry", "theme-realestate");
   await sql(`insert into products (store_id,category,name,description,price,options_json) values ($1,'فلل للبيع','فيلا حي الملقا','واجهة شمالية، تشطيب فاخر',2400000,'{"specs":[{"label":"المساحة","value":"450م²"},{"label":"الغرف","value":"6"},{"label":"عمر العقار","value":"جديد"}]}')`, [ie]);
   page = await newPage(browser, errors);
+  await page.goto(`${BASE}/?store=nope`);
+  await sql("update products set image_url=$1 where store_id=$2", [await seedImage(page, "seed/re1.png", "🏠", "#bfdbfe", "#1e3a8a", 900, 600), ie]);
   await page.goto(`${BASE}/?store=itqan`); await page.locator(".listing").first().waitFor();
   await shot(page, "17-inquiry-home");
   await page.locator(".listing").first().click(); await page.getByText("اطلب معاينة / استفسر").click();
-  await page.locator(".sheet .segmented >> text=📌 حجز مبدئي").click();
+  await page.locator(".sheet .choice >> text=حجز مبدئي").click();
   await page.locator('.sheet label:has-text("الاسم") input').fill("خالد");
   await page.locator('.sheet label:has-text("رقم الجوال") input').fill("0577777777");
   await shot(page, "18-inquiry-form");
@@ -413,7 +449,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await page.goto(`${BASE}/?store=adala`); await page.locator(".product").first().waitFor();
   await shot(page, "21-legal-home");
   await page.locator(".cta-bar .btn").click();
-  await page.locator(".sheet .segmented >> text=💻 عن بُعد").click();
+  await page.locator(".sheet .choice >> text=عن بُعد").click();
   await page.locator(".sheet textarea").fill("نزاع مع شريك حول توزيع الأرباح");
   await page.locator('.sheet label:has-text("الاسم") input').fill("فهد");
   await page.locator('.sheet label:has-text("رقم الجوال") input').fill("0599999999");
@@ -434,7 +470,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await shot(page, "23-store-closed");
   await sql("update stores set open_time=$1, close_time=$2 where slug='test-rest'", [fmt(hNow - 1), fmt(hNow - 2)]); // overnight wrap, open now
   await page.reload(); await page.locator(".hero-name").waitFor();
-  check("overnight schedule: open across midnight", await page.getByText("مفتوح الآن").isVisible());
+  check("overnight schedule: open across midnight", await page.locator(".sf-info .dot.on").isVisible());
   await sql("update stores set is_open=false where slug='test-rest'");
   await page.reload(); await page.locator(".hero-name").waitFor();
   check("emergency close", await page.getByText("مغلق الآن مؤقتاً").isVisible());
