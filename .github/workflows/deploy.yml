@@ -1,0 +1,65 @@
+# نشر تلقائي: Supabase (قاعدة البيانات + الدوال) ثم الواجهة على GitHub Pages
+# يتطلب سر المستودع SUPABASE_ACCESS_TOKEN (و اختيارياً ADMIN_EMAIL و ANTHROPIC_API_KEY)
+# وتفعيل Pages: Settings ← Pages ← Source = GitHub Actions
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  supabase:
+    runs-on: ubuntu-latest
+    outputs:
+      supabase_url: ${{ steps.deploy.outputs.supabase_url }}
+      anon_key: ${{ steps.deploy.outputs.anon_key }}
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::أضف السر SUPABASE_ACCESS_TOKEN في Settings ← Secrets and variables ← Actions لتفعيل النشر"; echo "enabled=false" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.check.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+      - if: steps.check.outputs.enabled == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - if: steps.check.outputs.enabled == 'true'
+        id: deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: bash scripts/ci-deploy.sh
+
+  pages:
+    needs: supabase
+    if: needs.supabase.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/build-pages.py _site "/${{ github.event.repository.name }}" "${{ needs.supabase.outputs.supabase_url }}" "${{ needs.supabase.outputs.anon_key }}"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: pages
+        uses: actions/deploy-pages@v4

@@ -74,6 +74,13 @@ export const EN = {
   // الهيكل
   "المنيو": "Menu",
   "الإعدادات": "Settings",
+  "رابط الدخول غير صالح أو منتهي": "Login link is invalid or expired",
+  "📧 أرسل رابط دخول لبريدي": "📧 Email me a login link",
+  "أو بدون كلمة مرور:": "Or without a password:",
+  "اكتب بريدك أولاً": "Enter your email first",
+  "انتظر دقيقة ثم أعد المحاولة": "Wait a minute and try again",
+  "تعذر الإرسال — تأكد من البريد": "Could not send — check the email",
+  "✅ أرسلنا رابط الدخول لبريدك — افتحه من نفس الجهاز": "✅ Login link sent — open it on this device",
   "العروض|tab": "Offers",
   "التصميم": "Design",
   "إعدادات المتجر": "Store settings",

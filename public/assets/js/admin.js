@@ -24,7 +24,19 @@ function langBtn(cls = "hbtn") {
     onClick: () => { setLang(isEn() ? "ar" : "en"); location.reload(); } }, isEn() ? "ع" : "EN");
 }
 
+// رابط الدخول من البريد يرجع بالرموز في #hash — نحولها لجلسة ثم ننظف الرابط
+async function consumeMagicLink() {
+  const hp = new URLSearchParams(location.hash.slice(1));
+  if (!hp.get("access_token") && !hp.get("error_description")) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  if (hp.get("access_token") && hp.get("refresh_token")) {
+    const { error } = await sb.auth.setSession({ access_token: hp.get("access_token"), refresh_token: hp.get("refresh_token") });
+    if (error) toast(t("رابط الدخول غير صالح أو منتهي"), "error");
+  } else toast(t("رابط الدخول غير صالح أو منتهي"), "error");
+}
+
 async function boot() {
+  try { await consumeMagicLink(); } catch { /* ignore */ }
   const { data } = await sb.auth.getSession();
   if (!data.session) return renderLogin();
   let st = null;
@@ -49,11 +61,13 @@ function renderLogin() {
   const pass = h("input", { class: "input", type: "password", autocomplete: "current-password", dir: "ltr", required: true, placeholder: "••••••••", "aria-label": t("كلمة المرور") });
   const err = h("div", { class: "error-text center", role: "alert" });
   const btn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "submit" }, t("تسجيل الدخول"));
+  const magic = h("button", { class: "btn btn-soft btn-block", type: "button" }, t("📧 أرسل رابط دخول لبريدي"));
+  const info = h("div", { class: "muted center", role: "status" });
   const form = h("form", { class: "auth-card" },
     h("h2", { text: t("دخول المدير العام") }),
     h("label", { class: "field" }, h("span", {}, t("البريد الإلكتروني")), h("div", { class: "icon-input" }, h("span", { class: "i", "aria-hidden": "true" }, "✉️"), email)),
     h("label", { class: "field" }, h("span", {}, t("كلمة المرور")), h("div", { class: "icon-input" }, h("span", { class: "i", "aria-hidden": "true" }, "🔒"), pass)),
-    err, btn);
+    err, btn, h("div", { class: "muted center small" }, t("أو بدون كلمة مرور:")), magic, info);
   fill(root, h("div", { class: "auth" },
     h("div", { class: "auth-hero" }, h("div", { class: "auth-lang" }, langBtn()), h("img", { class: "art", src: "/assets/img/login-admin.svg", alt: "" }),
       h("h1", { text: t("لوحة الإدارة") }), h("p", { text: t("تابع كل المتاجر والاشتراكات من مكان واحد") })),
@@ -65,6 +79,15 @@ function renderLogin() {
     btn.disabled = false;
     if (error) { err.textContent = t("بيانات الدخول غير صحيحة"); return; }
     boot();
+  });
+  magic.addEventListener("click", async () => {
+    err.textContent = ""; info.textContent = "";
+    if (!email.checkValidity() || !email.value.trim()) { err.textContent = t("اكتب بريدك أولاً"); email.focus(); return; }
+    magic.disabled = true;
+    const { error } = await sb.auth.signInWithOtp({ email: email.value.trim(), options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname } });
+    magic.disabled = false;
+    if (error) { err.textContent = /rate|seconds/i.test(error.message) ? t("انتظر دقيقة ثم أعد المحاولة") : t("تعذر الإرسال — تأكد من البريد"); return; }
+    info.textContent = t("✅ أرسلنا رابط الدخول لبريدك — افتحه من نفس الجهاز");
   });
 }
 
