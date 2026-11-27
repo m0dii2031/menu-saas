@@ -30,7 +30,7 @@ jobs:
           if [ -n "$TOKEN" ]; then echo "enabled=true" >> "$GITHUB_OUTPUT"
           else echo "::notice::أضف السر SUPABASE_ACCESS_TOKEN في Settings ← Secrets and variables ← Actions لتفعيل النشر"; echo "enabled=false" >> "$GITHUB_OUTPUT"; fi
       - if: steps.check.outputs.enabled == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - if: steps.check.outputs.enabled == 'true'
         uses: supabase/setup-cli@v1
         with:
@@ -55,7 +55,7 @@ jobs:
       name: github-pages
       url: ${{ steps.pages.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: python3 scripts/build-pages.py _site "/${{ github.event.repository.name }}" "${{ needs.supabase.outputs.supabase_url }}" "${{ needs.supabase.outputs.anon_key }}"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

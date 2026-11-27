@@ -122,7 +122,7 @@ if [ -n "${ADMIN_EMAIL:-}" ]; then
   run_sql "$tmp" && echo "  صلاحية المدير ✅ — ادخل من ${APP_URL%/}/admin بزر «أرسل رابط دخول لبريدي»"
   rm -f "$tmp"
 else
-  echo "::warning::ADMIN_EMAIL غير مضبوط — لن يُنشأ حساب مدير"
+  echo "  ADMIN_EMAIL غير مضبوط — تخطي (المديرون الحاليون كما هم)"
 fi
 echo "::endgroup::"
 
