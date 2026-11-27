@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.vision-menu]
 verify_jwt = false
+
+[functions.cleanup-media]
+verify_jwt = false
