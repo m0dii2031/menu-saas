@@ -480,4 +480,11 @@ export const EN = {
   "المفتاح السري": "Secret key",
   "الرمز غير صحيح، حاول مرة ثانية": "Wrong code, try again",
   "✅ تم تفعيل التحقق بخطوتين": "✅ Two-step verification is on",
+  "🔐 رمز التحقق:": "🔐 Verification code:",
+  "⚠️ المبلغ الذي ظهر في متصفح العميل ({0}) يختلف عن الحساب الصحيح. اعتمد الإجمالي الموجود هنا.": "⚠️ The amount shown in the customer's browser ({0}) differs from the correct total. Use the total shown here.",
+  "رسوم التوصيل": "Delivery fee",
+  "رقم الطلب": "Order number",
+  "❌ لا يوجد طلب بهذا الرقم — الرسالة غير صحيحة": "❌ No order with this number — the message is not genuine",
+  "🔎 تحقق من طلب وصلك على واتساب": "🔎 Verify an order you got on WhatsApp",
+  "اكتب رقم الطلب وطابق رمز التحقق والإجمالي مع الرسالة. العميل يقدر يعدّل نص الرسالة قبل إرسالها، أما السجل هنا فمحسوب من أسعارك.": "Enter the order number and match the verification code and total with the message. Customers can edit the message text before sending; this log is calculated from your prices.",
 };

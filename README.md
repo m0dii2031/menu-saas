@@ -39,6 +39,7 @@ public/                         ← الواجهة (تُرفع كما هي عل�
 supabase/
   migrations/20261126000000_init.sql      ← الجداول + RLS + دوال RPC + Storage
   migrations/20261127000000_features.sql  ← الطلبات، الكوبونات، المناطق، المخزون، الأوقات، سجل الإدارة، التحقق بخطوتين
+  migrations/20261128000000_order_integrity.sql ← تسعير الطلبات في الخادم + رمز التحقق
   functions/sign-upload         ← روابط رفع موقّعة بعد التحقق من جلسة التاجر
   functions/vision-menu         ← استخراج المنيو من صورة (Claude) — خادم فقط
   functions/manifest            ← Manifest ديناميكي لكل متجر
@@ -46,7 +47,7 @@ supabase/
   cron.sql                      ← جدولة التنظيف اليومي
 edge/og.js, middleware.js, netlify/   ← معاينة روابط المتاجر في واتساب (Vercel / Netlify)
 scripts/deploy.sh               ← النشر على Supabase بأمر واحد
-tests/e2e/                      ← 66 اختبار واجهة (Playwright + Postgres حقيقي)
+tests/e2e/                      ← 70 اختبار واجهة (Playwright + Postgres حقيقي)
 tests/sql/                      ← اختبارات الحماية والدوال مباشرة على قاعدة البيانات
 docs/DEVICE_TESTING.md          ← قائمة التجربة على الجوالات الفعلية
 ```
@@ -65,7 +66,7 @@ export SUPABASE_PROJECT_REF=xxxx SUPABASE_ANON_KEY=... APP_URL=https://your-doma
 اتبع **[`dashboard/README.md`](dashboard/README.md)**: ملف SQL واحد، و4 دوال كل وحدة في ملف، وخطوات بالضغطات.
 
 ### يدوياً
-1. **قاعدة البيانات:** في **SQL Editor** شغّل `20261126000000_init.sql` ثم `20261127000000_features.sql` (آمنة لإعادة التشغيل).
+1. **قاعدة البيانات:** في **SQL Editor** شغّل ملفات `supabase/migrations` بالترتيب (أو `dashboard/1-database.sql` دفعة واحدة) (آمنة لإعادة التشغيل).
    تأكد أن مخطط `private` **غير** مكشوف في **Project Settings → API → Exposed schemas**.
 2. **المدير:** أنشئ حساباً من **Authentication → Users** ثم:
    ```sql
@@ -90,6 +91,7 @@ export SUPABASE_PROJECT_REF=xxxx SUPABASE_ANON_KEY=... APP_URL=https://your-doma
 | RLS صارم | الزوار يقرؤون المتاجر النشطة غير المنتهية فقط؛ لا كتابة مباشرة لأي دور، كل الكتابة عبر RPC بقائمة حقول بيضاء. |
 | رمز PIN | مُجزّأ bcrypt في `private.store_secrets` (غير مكشوف عبر API ولا Realtime). قفل 15 دقيقة بعد 5 محاولات خاطئة. |
 | المدير | Supabase Auth + `private.admins` + **تحقق بخطوتين**: إذا فعّله المدير تُرفض كل عمليات الإدارة بدون جلسة `aal2`. كل عملية تُسجَّل في `private.audit_log`. الحذف النهائي يشترط كتابة رابط المتجر. |
+| سلامة الأسعار | **الخادم يحسب كل طلب بنفسه** من أسعار المنتجات والأحجام والإضافات ورسوم التوصيل والكوبون، ويتجاهل أي سعر يرسله المتصفح. لكل طلب **رمز تحقق** عشوائي يُطبع في رسالة واتساب، والتاجر يطابق رقم الطلب والرمز والإجمالي من «🔎 تحقق من طلب» في سجل الطلبات (العميل يقدر يعدّل نص رسالة واتساب قبل إرسالها، لكنه لا يقدر يعدّل السجل). |
 | بيانات الطلبات | اسم العميل وجواله وعنوانه تُحفظ في `analytics_events.meta` ولا يقرؤها إلا تاجر المتجر عبر رمز جلسته. |
 | الكوبونات | في مخطط خاص؛ التحقق عبر RPC مع حد محاولات لمنع التخمين؛ النسبة القصوى 90%. |
 | Vision API | في الخادم فقط، 5 صور يومياً لكل متجر مع إرجاع الرصيد عند الفشل. |
@@ -103,7 +105,7 @@ export SUPABASE_PROJECT_REF=xxxx SUPABASE_ANON_KEY=... APP_URL=https://your-doma
 
 ## الاختبارات
 ```bash
-cd tests/e2e && npm install && PGHOST=/var/run/postgresql PGPORT=5432 npm test   # 66 سيناريو
+cd tests/e2e && npm install && PGHOST=/var/run/postgresql PGPORT=5432 npm test   # 70 سيناريو
 PGHOST=/var/run/postgresql ./tests/sql/run.sh                                     # اختبارات قاعدة البيانات
 ```
 تشمل: رحلة المدير والتاجر والعميل، نص رسالة واتساب، الأوضاع الخمسة، الكوبونات والمناطق والحد الأدنى، المخزون وإرجاعه عند الإلغاء،

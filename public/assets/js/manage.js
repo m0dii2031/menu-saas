@@ -794,7 +794,8 @@ async function openOrders(initial = "new") {
   const tabsEl = h("div", { class: "status-tabs", role: "tablist" });
   const list = h("div", { class: "stack" });
   const more = h("button", { class: "btn btn-block", type: "button", hidden: true }, t("عرض المزيد"));
-  const sheet = openSheet({ title: t("🧾 سجل الطلبات"), body: [tabsEl, list, more], className: "orders-sheet" });
+  const verifyBox = orderVerifyBox();
+  const sheet = openSheet({ title: t("🧾 سجل الطلبات"), body: [verifyBox, tabsEl, list, more], className: "orders-sheet" });
 
   async function load(reset) {
     if (reset) { before = null; fill(list, h("div", { class: "center muted" }, h("span", { class: "spinner" }))); }
@@ -818,6 +819,30 @@ async function openOrders(initial = "new") {
   more.addEventListener("click", () => load(false));
   await load(true);
   return sheet;
+}
+
+/** التحقق من طلب برقمه: العميل يقدر يعدّل نص رسالة واتساب، لكن السجل محسوب في الخادم */
+function orderVerifyBox() {
+  const inp = h("input", { class: "input ltr", inputmode: "numeric", placeholder: "1002", "aria-label": t("رقم الطلب") });
+  const out = h("div", { class: "stack" });
+  const btn = h("button", { class: "btn btn-soft", type: "button" }, t("تحقق"));
+  const go = async () => {
+    const n = parseInt(toLatinDigits(inp.value).replace(/\D/g, ""), 10);
+    if (!n) { inp.classList.add("invalid"); return; }
+    inp.classList.remove("invalid");
+    btn.disabled = true;
+    try {
+      const o = await rpc(sb, "merchant_find_order", { p_token: token, p_order_no: n });
+      fill(out, o ? orderCard(o, go) : h("div", { class: "alert alert-danger" }, t("❌ لا يوجد طلب بهذا الرقم — الرسالة غير صحيحة")));
+    } catch (e) { fill(out, h("div", { class: "alert alert-danger" }, friendlyError(e))); }
+    btn.disabled = false;
+  };
+  btn.addEventListener("click", go);
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  return h("div", { class: "verify-box" },
+    h("b", {}, t("🔎 تحقق من طلب وصلك على واتساب")),
+    h("span", { class: "hint" }, t("اكتب رقم الطلب وطابق رمز التحقق والإجمالي مع الرسالة. العميل يقدر يعدّل نص الرسالة قبل إرسالها، أما السجل هنا فمحسوب من أسعارك.")),
+    h("div", { class: "row" }, inp, btn), out);
 }
 
 function orderCard(o, reload) {
@@ -846,6 +871,9 @@ function orderCard(o, reload) {
       h("b", { class: "ltr", text: `#${ORDER_PREFIX[mode] || "ORD"}-${o.order_no ?? "—"}` }),
       h("span", { class: `badge ${st.cls}` }, st.label),
       h("span", { class: "hint grow", style: { "text-align": "end" }, text: timeAgo(o.created_at) })),
+    m.code ? h("div", { class: "o-verify" }, t("🔐 رمز التحقق:"), " ", h("b", { class: "ltr", text: m.code })) : null,
+    m.mismatch ? h("div", { class: "alert alert-warning small" },
+      t("⚠️ المبلغ الذي ظهر في متصفح العميل ({0}) يختلف عن الحساب الصحيح. اعتمد الإجمالي الموجود هنا.", { 0: money(m.client_total ?? 0) })) : null,
     h("div", { class: "o-lines" },
       m.name ? h("div", {}, "👤 ", h("b", { text: m.name })) : null,
       m.phone ? h("div", {}, "📞 ", h("span", { class: "ltr", text: m.phone })) : null,
@@ -856,7 +884,8 @@ function orderCard(o, reload) {
       m.pay ? h("div", { text: `💳 ${m.pay}` }) : null,
       m.note ? h("div", { class: "o-note", text: `📝 ${m.note}` }) : null),
     items.length ? h("div", { class: "o-items" }, items.map((i) => h("div", { class: "row between" },
-      h("span", { text: `${i.n}${i.s ? ` (${i.s})` : ""} ×${i.q ?? 1}` }), h("span", { text: money(i.t ?? 0) })))) : null,
+      h("span", { text: `${i.n}${i.s ? ` (${i.s})` : ""} ×${i.q ?? 1}${Array.isArray(i.a) && i.a.length ? ` + ${i.a.map((x) => x.name).join("، ")}` : ""}` }), h("span", { text: money(i.t ?? 0) })))) : null,
+    m.fee ? h("div", { class: "row between hint" }, h("span", {}, t("رسوم التوصيل")), h("span", { text: money(m.fee) })) : null,
     h("div", { class: "o-total row between" },
       h("span", {}, m.coupon ? `🎟️ ${m.coupon} (-${money(m.discount || 0)})` : t("الإجمالي")),
       h("b", { text: money(o.total ?? 0) })),

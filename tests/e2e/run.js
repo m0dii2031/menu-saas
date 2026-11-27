@@ -6,7 +6,7 @@ const path = require("path");
 const http = require("http");
 
 const PUB = path.resolve(__dirname, "../../public");
-const MIGRATIONS = ["20261126000000_init.sql", "20261127000000_features.sql"].map((f) => path.resolve(__dirname, "../../supabase/migrations", f));
+const MIGRATIONS = ["20261126000000_init.sql", "20261127000000_features.sql", "20261128000000_order_integrity.sql"].map((f) => path.resolve(__dirname, "../../supabase/migrations", f));
 const PG = { host: process.env.PGHOST || "/var/run/postgresql", port: Number(process.env.PGPORT || 5432), user: process.env.PGUSER || "postgres" };
 const NM = path.resolve(__dirname, "node_modules");
 const OUT = process.env.OUT || path.resolve(__dirname, "shots");
@@ -126,7 +126,7 @@ function staticServer() {
     const f = path.join(PUB, path.normalize(p));
     if (!f.startsWith(PUB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end("nf"); }
     let body = fs.readFileSync(f);
-    if (p.endsWith("config.js")) body = Buffer.from(body.toString().replace("https://YOUR-PROJECT-REF.supabase.co", "https://test.supabase.co").replace("YOUR-ANON-OR-PUBLISHABLE-KEY", "sb_publishable_test"));
+    if (p.endsWith("config.js")) body = Buffer.from(body.toString().replace(/SUPABASE_URL: ".*?"/, 'SUPABASE_URL: "https://test.supabase.co"').replace(/SUPABASE_ANON_KEY: ".*?"/, 'SUPABASE_ANON_KEY: "sb_publishable_test"'));
     res.writeHead(200, { "Content-Type": types[path.extname(f)] || "application/octet-stream" });
     res.end(body);
   }).listen(8787);
@@ -411,6 +411,8 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   check("message contains all sections in required order", inOrder);
   const [ev] = await sql("select order_total, items_json from analytics_events where event_type='order_click'");
   check("order_click logged with total 91", Number(ev.order_total) === 91, JSON.stringify(ev.items_json));
+  const [{ code: vcode }] = await sql("select meta->>'code' code from analytics_events where event_type='order_click' order by id desc limit 1");
+  check("message carries the server verification code", /^[A-Z2-9]{4}$/.test(vcode || "") && msg.includes(`🔐 رمز التحقق: *${vcode}*`), vcode);
   await shot(page, "14-store-sent");
   await page.locator(".sheet .btn-ghost").first().click();
   await page.reload(); await page.locator(".reorder").waitFor(); await page.locator(".reorder").scrollIntoViewIfNeeded(); await shot(page, "14c-store-reorder");
@@ -578,6 +580,14 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   const oc = await page.locator(".ocard").first().innerText();
   check("orders log shows order details", oc.includes("#ORD-1001") && oc.includes("سلمان") && oc.includes("WELCOME") && oc.includes("الملقا"), oc.split("\n").slice(0, 3).join(" | "));
   await shot(page, "v2-orders-log");
+  check("order card shows verification code", /رمز التحقق:\s*[A-Z2-9]{4}/.test(oc));
+  await page.locator(".verify-box input").fill("1001"); await page.locator(".verify-box > .row button").click();
+  await page.locator(".verify-box .ocard").waitFor();
+  check("verify box finds order by number", (await page.locator(".verify-box .ocard").innerText()).includes("#ORD-1001"));
+  await shot(page, "v2-orders-verify");
+  await page.locator(".verify-box input").fill("9999"); await page.locator(".verify-box > .row button").click();
+  await page.locator(".verify-box .alert-danger").waitFor();
+  check("verify box rejects unknown order number", (await page.locator(".verify-box .alert-danger").innerText()).includes("لا يوجد طلب"));
   await page.locator(".ocard").first().getByRole("button", { name: "إلغاء" }).click();
   await page.locator(".sheet").last().locator(".sheet-foot .btn").first().click();
   const rs = await waitDb(`select stock from products where name='شاورما' and store_id='${v2}'`, (r) => r.stock === 2);
@@ -642,7 +652,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await sql("update stores set open_time=$1, close_time=$2 where slug='test-rest'", [fmt(hNow + 1), fmt(hNow)]); // overnight wrap: closed between close (this hour) and open (next hour)
   page = await newPage(browser, errors);
   await page.goto(`${BASE}/?store=test-rest`); await page.locator(".hero-name").waitFor();
-  check("overnight schedule: closed in the 1h gap", await page.getByText("مغلق الآن — يفتح الساعة").isVisible());
+  check("overnight schedule: closed in the 1h gap", await page.getByText(/مغلق الآن — يفتح (بكرة )?الساعة/).isVisible());
   await shot(page, "23-store-closed");
   await sql("update stores set open_time=$1, close_time=$2 where slug='test-rest'", [fmt(hNow - 1), fmt(hNow - 2)]); // overnight wrap, open now
   await page.reload(); await page.locator(".hero-name").waitFor();

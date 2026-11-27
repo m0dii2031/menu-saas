@@ -283,4 +283,6 @@ export const EN = {
   "الشهر التالي": "Next month",
   "اختيارك": "Your dates",
   "بعض الأيام المختارة محجوزة، اختر تاريخاً آخر": "Some of the selected days are booked — choose other dates",
+  "بعض الأصناف نفدت أو تغيّرت — حدّث الصفحة وراجع السلة": "Some items sold out or changed — refresh and review your cart",
+  "السلة فارغة أو غير صالحة": "Your cart is empty or invalid",
 };

@@ -970,14 +970,14 @@ function openCheckout() {
     const coupon = disc ? st.coupon.code : null;
     const payLabel = { cash: "عند الاستلام (نقداً)", card: "عند الاستلام (شبكة / مدى)", transfer: "تحويل بنكي" }[st.pay];
     const note = multiLine(notes.input.value, 400);
-    const items = S.cart.map((l) => ({ id: l.pid, n: l.name.slice(0, 60), s: l.size?.name || null, q: l.qty, t: lineUnit(l) * l.qty }));
+    const items = S.cart.map((l) => ({ id: l.pid, n: l.name.slice(0, 60), s: l.size?.name || null, a: l.addons.map((x) => x.name), q: l.qty, t: lineUnit(l) * l.qty }));
     const total = Math.max(0, sub - disc) + fee;
     const meta = { mode: "order", name: who.name, phone: who.phone, type: st.type, district: dist, address: addr, gps: st.gps,
       pay: payLabel, note, coupon, discount: disc || null, fee };
 
-    const ok = await submitToWhatsApp(sendBtn, total, items, (no) => buildOrderMessage(no, {
+    const ok = await submitToWhatsApp(sendBtn, total, items, (no, srv) => buildOrderMessage(no, {
       ...who, type: st.type, district: dist, address: addr, gps: st.gps, note, sub, fee, payLabel, coupon, discount: disc,
-    }), meta);
+    }, srv), meta);
     if (ok) {
       ls.set(lastKey(), { at: Date.now(), lines: S.cart.map((l) => ({ ...l })) });
       S.cart = []; saveCart(); refreshCta(); sheet.close();
@@ -990,15 +990,22 @@ const SEP = "━━━━━━━━━━━━━━━━";
 const frameTop = (title) => `┐────── ${title} ──────┌`;
 const FRAME_BOTTOM = "┘─────────────────────└";
 
-function buildOrderMessage(no, d) {
+/** سطر رمز التحقق: يطابقه التاجر مع سجل الطلبات (الرسالة قابلة للتعديل من العميل، السجل لا) */
+const verifyLine = (srv) => srv?.code ? `🔐 رمز التحقق: *${srv.code}*` : "⚠️ لم يُسجَّل هذا الطلب في النظام — تأكد منه قبل التنفيذ";
+
+function buildOrderMessage(no, d, srv = null) {
+  // عند نجاح التسجيل: كل الأرقام من حساب الخادم
+  if (srv?.code) d = { ...d, sub: num(srv.sub), fee: num(srv.fee), discount: num(srv.discount), coupon: srv.coupon || null };
   const L = [];
   L.push(frameTop("إشعار تأكيد الطلب 🛍️"));
   L.push(`رقم الطلب: *#ORD-${no}*`);
+  L.push(verifyLine(srv));
   L.push(`🏪 المتجر: ${S.store.name}`);
   L.push("");
   L.push("🔷 *المنتجات:*");
-  S.cart.forEach((l) => {
-    L.push(`• ${l.name}${l.size ? ` (${l.size.name})` : ""} ×${l.qty} — ${moneyText(lineUnit(l) * l.qty)}`);
+  S.cart.forEach((l, i) => {
+    const lt = srv?.code && srv.items?.[i] ? num(srv.items[i].t) : lineUnit(l) * l.qty;
+    L.push(`• ${l.name}${l.size ? ` (${l.size.name})` : ""} ×${l.qty} — ${moneyText(lt)}`);
     if (l.addons.length) L.push(`   ➕ الإضافات: ${l.addons.map((x) => `${x.name} (+${moneyText(x.price)})`).join("، ")}`);
     if (l.note) L.push(`   📝 ملاحظة: ${l.note}`);
   });
@@ -1055,21 +1062,29 @@ async function submitToWhatsApp(btn, total, items, build, meta = null) {
   btn.disabled = true;
   fill(btn, h("span", { class: "spinner", "aria-hidden": "true" }), t(" جاري التجهيز..."));
 
-  let no;
+  let no, srv = null;
   try {
     const r = await withTimeout(rpc(sb, "log_event", {
       p_store_id: S.store.id, p_event_type: "order_click", p_order_total: Math.round(total * 100) / 100, p_items: items, p_meta: meta,
     }), 3500);
     if (r?.ok === false) {
       btn.disabled = false; btn.textContent = label;
-      toast(r.error === "rate_limited" ? t("طلبات كثيرة خلال وقت قصير، انتظر دقائق ثم حاول") : t("المتجر غير متاح حالياً"), "error");
+      const msg = {
+        rate_limited: t("طلبات كثيرة خلال وقت قصير، انتظر دقائق ثم حاول"),
+        items_changed: t("بعض الأصناف نفدت أو تغيّرت — حدّث الصفحة وراجع السلة"),
+        min_order: t("الحد الأدنى لطلبات التوصيل {m}", { m: money(r.min_order) }),
+        invalid_items: t("السلة فارغة أو غير صالحة"),
+      }[r.error] || t("المتجر غير متاح حالياً");
+      toast(msg, "error");
+      if (r.error === "items_changed") load();
       return false;
     }
     no = r?.order_no;
+    srv = r?.code ? r : null;
   } catch { /* لا نعطل الطلب إذا تأخر الخادم */ }
   if (!no) no = String(Date.now()).slice(-4);
 
-  const url = waLink(S.store.whatsapp_phone, build(no));
+  const url = waLink(S.store.whatsapp_phone, build(no, srv));
   ls.set(cdKey(), Date.now() + CONFIG.ORDER_COOLDOWN_SECONDS * 1000);
   btn.disabled = false; btn.textContent = label;
   showSent(url, no);
@@ -1236,14 +1251,14 @@ function openBooking(p) {
     const g = Math.floor(num(guests.input.value));
     const note = multiLine(notes.input.value, 400);
     const meta = { mode: "booking", name: who.name, phone: who.phone, date: `${date.value} +${nights} ${unit}`, note };
-    const ok = await submitToWhatsApp(sendBtn, total, [{ id: it.id, n: it.name.slice(0, 60), q: nights, t: total }], (no) => {
-      const L = [frameTop("إشعار طلب حجز 📅"), `رقم الطلب: *#BK-${no}*`, `🏪 ${s.name}`, "",
+    const ok = await submitToWhatsApp(sendBtn, total, [{ id: it.id, n: it.name.slice(0, 60), q: nights, t: total }], (no, srv) => {
+      const L = [frameTop("إشعار طلب حجز 📅"), `رقم الطلب: *#BK-${no}*`, verifyLine(srv), `🏪 ${s.name}`, "",
         "🔷 *تفاصيل الحجز:*", `• الوحدة: ${it.name}`, `• تاريخ الدخول: ${fmtDateMsg(date.value)}`, `• المدة: ${nights} ${unit}`];
       if (unit === "ليلة" || unit === "يوم") L.push(`• تاريخ الخروج: ${fmtDateMsg(addDays(date.value, nights))}`);
       if (g > 0) L.push(`• عدد الأشخاص: ${g}`);
       L.push("", `👤 الاسم: ${who.name}`, `📞 الجوال: ${who.phone}`);
       if (note) L.push(`📝 ملاحظات: ${note}`);
-      L.push(SEP, "💳 *تفاصيل الفاتورة:*", `• السعر / ${unit}: ${moneyText(it.price)}`, `• الإجمالي: *${moneyText(total)}*`, FRAME_BOTTOM);
+      L.push(SEP, "💳 *تفاصيل الفاتورة:*", `• السعر / ${unit}: ${moneyText(it.price)}`, `• الإجمالي: *${moneyText(srv ? num(srv.total) : total)}*`, FRAME_BOTTOM);
       return L.join("\n");
     }, meta);
     if (ok) sheet.close();
@@ -1288,8 +1303,8 @@ function openInquiry(p) {
     const periodLabel = { am: "صباحاً", pm: "مساءً", any: "أي وقت" }[period];
     const note = multiLine(notes.input.value, 500);
     const meta = { mode: "inquiry", name: who.name, phone: who.phone, kind: kindLabel, date: `${date.value || ""} ${periodLabel}`.trim(), note };
-    const ok = await submitToWhatsApp(sendBtn, it ? num(it.price) : 0, it ? [{ n: it.name.slice(0, 60), q: 1, t: num(it.price) }] : [], (no) => {
-      const L = [frameTop(`إشعار طلب ${kindLabel} 🏢`), `رقم الطلب: *#RQ-${no}*`, `🏪 ${s.name}`, "", "🔷 *العرض:*"];
+    const ok = await submitToWhatsApp(sendBtn, it ? num(it.price) : 0, it ? [{ id: it.id, n: it.name.slice(0, 60), q: 1, t: num(it.price) }] : [{ n: "استفسار عام", q: 1, t: 0 }], (no, srv) => {
+      const L = [frameTop(`إشعار طلب ${kindLabel} 🏢`), `رقم الطلب: *#RQ-${no}*`, verifyLine(srv), `🏪 ${s.name}`, "", "🔷 *العرض:*"];
       if (it) {
         L.push(`• ${it.name}`);
         if (num(it.price) > 0) L.push(`• السعر المعلن: ${moneyText(it.price)}${it.options_json?.unit ? " / " + it.options_json.unit : ""}`);
@@ -1365,8 +1380,8 @@ function openDonation(p) {
     saveCustomer({ phone: ph, ...(name !== "فاعل خير" ? { name } : {}) });
     const it = S.products.find((x) => x.id === sel.value);
     const meta = { mode: "charity", name, phone: ph, kind: it?.name || "تبرع عام", pay: "تحويل بنكي" };
-    const ok = await submitToWhatsApp(sendBtn, value, [{ n: (it?.name || "تبرع عام").slice(0, 60), q: 1, t: value }], (no) => [
-      frameTop("إشعار تبرع 💚"), `رقم الإشعار: *#DN-${no}*`, `🏛️ ${s.name}`, "",
+    const ok = await submitToWhatsApp(sendBtn, value, [{ n: (it?.name || "تبرع عام").slice(0, 60), q: 1, t: value }], (no, srv) => [
+      frameTop("إشعار تبرع 💚"), `رقم الإشعار: *#DN-${no}*`, verifyLine(srv), `🏛️ ${s.name}`, "",
       "🔷 *التبرع:*", `• المبادرة: ${it?.name || "تبرع عام"}`, `• المبلغ: *${moneyText(value)}*`,
       `• الدفع: ${s.iban_number ? `تحويل بنكي إلى ${s.iban_number}` : "تحويل بنكي"}`, "",
       `👤 المتبرع: ${name}`, `📞 الجوال: ${ph}`, SEP,
@@ -1419,12 +1434,13 @@ function openLegal(p) {
     const periodLabel = { am: "صباحاً", pm: "مساءً", any: "أي وقت" }[period];
     const fee = it ? num(it.price) : 0;
     const meta = { mode: "legal", name: who.name, phone: who.phone, kind: `${it?.name || "غير محدد"} — ${kindLabel}`, date: `${date.value || ""} ${periodLabel}`.trim(), note: b };
-    const ok = await submitToWhatsApp(sendBtn, fee, it ? [{ n: it.name.slice(0, 60), q: 1, t: fee }] : [], (no) => {
-      const L = [frameTop("إشعار طلب استشارة ⚖️"), `رقم الطلب: *#LG-${no}*`, `🏛️ ${s.name}`, "",
+    const ok = await submitToWhatsApp(sendBtn, fee, it ? [{ id: it.id, n: it.name.slice(0, 60), q: 1, t: fee }] : [{ n: "استشارة", q: 1, t: 0 }], (no, srv) => {
+      const L = [frameTop("إشعار طلب استشارة ⚖️"), `رقم الطلب: *#LG-${no}*`, verifyLine(srv), `🏛️ ${s.name}`, "",
         "🔷 *الاستشارة:*", `• التخصص: ${it?.name || "غير محدد"}`, `• النوع: ${kindLabel}`,
         `• الوقت المناسب: ${date.value ? fmtDateMsg(date.value) + " — " : ""}${periodLabel}`, "",
         "📝 *نبذة مختصرة:*", b, "", `👤 الاسم: ${who.name}`, `📞 الجوال: ${who.phone}`];
-      if (fee > 0) L.push(SEP, "💳 *تفاصيل الفاتورة:*", `• رسوم الاستشارة: *${moneyText(fee)}*`);
+      const f2 = srv ? num(srv.total) : fee;
+      if (f2 > 0) L.push(SEP, "💳 *تفاصيل الفاتورة:*", `• رسوم الاستشارة: *${moneyText(f2)}*`);
       L.push(FRAME_BOTTOM);
       return L.join("\n");
     }, meta);
