@@ -256,6 +256,12 @@ export const MODES = {
   legal: { label: "استشارات قانونية", items: "التخصصات", item: "تخصص", icon: "⚖️" },
 };
 
+/** نسخة مترجمة من بيانات الوضع (الأسماء تُعرض حسب اللغة) */
+export function tMode(id) {
+  const m = MODES[id] || MODES.order;
+  return { ...m, label: t(m.label), items: t(m.items), item: t(m.item) };
+}
+
 export function applyTheme(s, target = document.body) {
   for (const t of THEMES) target.classList.remove(t.id);
   target.classList.add(themeById(s?.theme_style).id);
@@ -480,14 +486,19 @@ const ERRORS = {
   ai_busy: "خدمة التحليل مشغولة، حاول بعد دقيقة",
   ai_error: "تعذر تحليل الصورة، حاول مجدداً",
   refused: "تعذر تحليل هذه الصورة",
+  confirm_mismatch: "الرابط المكتوب لا يطابق رابط المتجر",
+  code_taken: "هذا الكود مستخدم لكوبون آخر",
+  invalid_code: "الكود من 3 إلى 20 حرفاً إنجليزياً أو رقماً",
+  invalid_value: "قيمة الخصم غير صحيحة",
+  invalid_status: "حالة غير صحيحة",
 };
 
 export function friendlyError(e) {
   const m = String(e?.message || e?.error || e || "");
-  for (const k of Object.keys(ERRORS)) if (m.includes(k)) return ERRORS[k];
-  if (/check constraint|violates/i.test(m)) return "إحدى القيم المدخلة غير صالحة";
-  if (/fetch|network|Failed/i.test(m)) return "تعذر الاتصال، تحقق من الإنترنت";
-  return "حدث خطأ غير متوقع";
+  for (const k of Object.keys(ERRORS)) if (m.includes(k)) return t(ERRORS[k]);
+  if (/check constraint|violates/i.test(m)) return t("إحدى القيم المدخلة غير صالحة");
+  if (/fetch|network|Failed/i.test(m)) return t("تعذر الاتصال، تحقق من الإنترنت");
+  return t("حدث خطأ غير متوقع");
 }
 
 export async function rpc(sb, fn, args) {
