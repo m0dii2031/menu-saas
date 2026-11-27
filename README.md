@@ -61,6 +61,9 @@ export SUPABASE_PROJECT_REF=xxxx SUPABASE_ANON_KEY=... APP_URL=https://your-doma
 ```
 يرحّل قاعدة البيانات، وينشر الدوال الأربع، ويضبط الأسرار، ويحدّث `config.js`، ثم يطبع الخطوات المتبقية.
 
+### بدون أوامر (نسخ ولصق من لوحة Supabase)
+اتبع **[`dashboard/README.md`](dashboard/README.md)**: ملف SQL واحد، و4 دوال كل وحدة في ملف، وخطوات بالضغطات.
+
 ### يدوياً
 1. **قاعدة البيانات:** في **SQL Editor** شغّل `20261126000000_init.sql` ثم `20261127000000_features.sql` (آمنة لإعادة التشغيل).
    تأكد أن مخطط `private` **غير** مكشوف في **Project Settings → API → Exposed schemas**.
