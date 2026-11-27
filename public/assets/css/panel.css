@@ -196,3 +196,6 @@ button.p-stat:active { transform: scale(.97); }
 .cal-day { height: 36px; border: 0; border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
 .cal-day:disabled { opacity: .35; cursor: default; }
 .cal-day.busy { background: #fee2e2; color: #b91c1c; text-decoration: line-through; }
+.audit-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--bg); }
+.audit-row b { font-size: 14px; }
+.panel-admin .p-top .hbtn { width: 38px; height: 38px; }

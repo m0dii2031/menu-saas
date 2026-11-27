@@ -2,7 +2,7 @@
 // لوحة الإدارة العامة (Super Admin) — Supabase Auth + private.admins
 // =========================================================
 import {
-  h, fill, toast, openSheet, confirmDialog, money, moneyText, num, oneLine, store as ls, THEMES, MODES, themeById,
+  h, fill, toast, openSheet, confirmDialog, money, moneyText, num, toLatinDigits, oneLine, store as ls, THEMES, MODES, themeById,
   createSb, rpc, friendlyError, copyText, daysLeft, isValidPhone, normalizePhone, waLink,
 } from "./common.js";
 
@@ -19,9 +19,10 @@ boot();
 async function boot() {
   const { data } = await sb.auth.getSession();
   if (!data.session) return renderLogin();
-  let ok = false;
-  try { ok = await rpc(sb, "is_admin"); } catch { /* ignore */ }
-  if (!ok) {
+  let st = null;
+  try { st = await rpc(sb, "admin_status"); } catch { /* ignore */ }
+  if (st?.admin && !st.ok) return renderMfaChallenge();
+  if (!st?.ok) {
     return fill(root, h("div", { class: "state-screen" }, h("div", { class: "card stack" },
       h("div", { class: "ico" }, "⛔"), h("h1", { text: "ليست لديك صلاحية المدير" }),
       h("p", { class: "muted", text: "هذا الحساب غير مضاف لجدول المدراء." }),
@@ -95,6 +96,8 @@ function render() {
     h("div", { class: "p-top" },
       h("div", { class: "p-logo" }, "🛡️"),
       h("div", { class: "p-title" }, h("h1", { text: "لوحة الإدارة" }), h("div", { class: "sub", text: `${total} متجر • ${counts.active + counts.soon} نشط` })),
+      h("button", { class: "hbtn", type: "button", "aria-label": "سجل العمليات", title: "سجل العمليات", onClick: auditSheet }, "📜"),
+      h("button", { class: "hbtn", type: "button", "aria-label": "الأمان والتحقق بخطوتين", title: "الأمان", onClick: securitySheet }, "🔐"),
       h("button", { class: "hbtn", type: "button", "aria-label": "تحديث", title: "تحديث", onClick: reload }, "↻"),
       h("button", { class: "hbtn", type: "button", "aria-label": "تسجيل الخروج", title: "خروج", onClick: logout }, "🚪")),
     h("div", { class: "p-greet", text: `آخر 30 يوم: ${views} زيارة • ${orders} طلب • ${money(revenue)}` }));
@@ -343,6 +346,8 @@ function editSheet(s) {
       h("label", { class: "field" }, h("span", {}, "نوع النشاط"), btype),
       h("div", { class: "field" }, h("span", { class: "label" }, "تمديد الاشتراك (أيام)"), h("div", { class: "row" }, extendDays, extBtn)),
       pinBtn,
+      h("button", { class: "btn btn-outline btn-block", type: "button", style: { color: "var(--danger)", "border-color": "var(--danger)" },
+        onClick: () => { sheet.close(); deleteSheet(s); } }, "🗑️ حذف المتجر نهائياً"),
     ],
     foot: saveBtn,
   });
@@ -379,5 +384,122 @@ function editSheet(s) {
         h("span", { class: "hint" }, "أرسله للتاجر — لن يظهر مرة أخرى.")),
         foot: h("button", { class: "btn btn-primary btn-block", type: "button", onClick: () => copyText(p) }, "نسخ") });
     } catch (e) { toast(friendlyError(e), "error"); }
+  });
+}
+
+/* =========================================================
+   الحذف النهائي، سجل العمليات، التحقق بخطوتين (TOTP)
+   ========================================================= */
+function deleteSheet(s) {
+  const confirmIn = h("input", { class: "input ltr", placeholder: s.slug, autocomplete: "off", "aria-label": "اكتب رابط المتجر للتأكيد" });
+  const btn = h("button", { class: "btn btn-danger btn-lg btn-block", type: "button", disabled: true }, "حذف نهائي");
+  confirmIn.addEventListener("input", () => { btn.disabled = confirmIn.value.trim().toLowerCase() !== s.slug; });
+  const sheet = openSheet({ title: `حذف «${s.name}»`, foot: btn, body: [
+    h("div", { class: "alert alert-danger" }, h("div", {},
+      h("b", {}, "هذا الإجراء لا يمكن التراجع عنه."),
+      h("div", { class: "small", text: "سيُحذف المتجر وكل أصنافه وكوبوناته وإحصائياته وسجل طلباته. الصور تُحذف تلقائياً في التنظيف الدوري." }))),
+    h("p", { style: { margin: "0" } }, "للتأكيد اكتب رابط المتجر: ", h("b", { class: "ltr", text: s.slug })),
+    confirmIn,
+    h("p", { class: "hint", style: { margin: "0" }, text: "تبي توقفه مؤقتاً بدل الحذف؟ استخدم زر «إيقاف» في بطاقة المتجر." }),
+  ] });
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      await rpc(sb, "admin_delete_store", { p_store_id: s.id, p_confirm_slug: confirmIn.value.trim() });
+      toast(`تم حذف «${s.name}» نهائياً`, "success");
+      sheet.close();
+      await reload();
+    } catch (e) { toast(friendlyError(e), "error"); btn.disabled = false; }
+  });
+}
+
+const AUDIT_LABELS = {
+  create_store: "➕ إنشاء متجر", update_store: "✏️ تعديل بيانات", extend: "📅 تمديد اشتراك", activate: "▶️ تفعيل",
+  suspend: "⏸️ إيقاف", reset_pin: "🔐 إعادة تعيين PIN", open_merchant: "🔧 دخول لوحة التاجر", delete_store: "🗑️ حذف متجر",
+};
+async function auditSheet() {
+  const body = h("div", { class: "stack" }, h("div", { class: "center" }, h("span", { class: "spinner" })));
+  openSheet({ title: "📜 سجل العمليات", body });
+  let rows;
+  try { rows = await rpc(sb, "admin_audit_log", { p_limit: 200 }); } catch (e) { return fill(body, h("div", { class: "alert alert-danger" }, friendlyError(e))); }
+  if (!rows.length) return fill(body, h("div", { class: "muted center" }, "لا توجد عمليات بعد"));
+  fill(body, ...rows.map((r) => h("div", { class: "audit-row" },
+    h("div", { class: "grow" },
+      h("b", { text: AUDIT_LABELS[r.action] || r.action }),
+      h("div", { class: "hint", text: `${r.store_name || "—"}${r.store_slug ? ` (${r.store_slug})` : ""}${r.details?.days ? ` • ${r.details.days} يوم` : ""}` })),
+    h("span", { class: "hint", style: { "white-space": "nowrap" }, text: new Date(r.at).toLocaleString("ar-u-ca-gregory-nu-latn", { dateStyle: "short", timeStyle: "short" }) }))));
+}
+
+/** شاشة إدخال رمز التحقق بخطوتين عند الدخول */
+async function renderMfaChallenge() {
+  const code = h("input", { class: "input pin-input", inputmode: "numeric", maxlength: "6", autocomplete: "one-time-code", placeholder: "••••••", "aria-label": "رمز التحقق" });
+  const err = h("div", { class: "error-text center", role: "alert" });
+  const btn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "submit" }, "تحقق");
+  const form = h("form", { class: "auth-card" }, h("h2", { text: "التحقق بخطوتين" }),
+    h("p", { class: "muted center", style: { margin: "0" }, text: "اكتب الرمز المكون من 6 أرقام من تطبيق المصادقة (Google Authenticator أو غيره)." }),
+    code, err, btn, h("button", { class: "btn btn-ghost btn-block", type: "button", onClick: logout }, "تسجيل الخروج"));
+  fill(root, h("div", { class: "auth" },
+    h("div", { class: "auth-hero" }, h("img", { class: "art", src: "/assets/img/login-admin.svg", alt: "" }), h("h1", { text: "خطوة أمان إضافية" })), form));
+  code.focus();
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const v = toLatinDigits(code.value).trim();
+    if (!/^\d{6}$/.test(v)) { err.textContent = "الرمز 6 أرقام"; return; }
+    btn.disabled = true; err.textContent = "";
+    try {
+      const { data, error } = await sb.auth.mfa.listFactors();
+      if (error) throw error;
+      const f = (data?.totp || []).find((x) => x.status === "verified");
+      if (!f) throw new Error("no_factor");
+      const r = await sb.auth.mfa.challengeAndVerify({ factorId: f.id, code: v });
+      if (r.error) throw r.error;
+      boot();
+    } catch { err.textContent = "الرمز غير صحيح أو انتهت صلاحيته"; btn.disabled = false; }
+  });
+}
+
+/** تفعيل/إلغاء التحقق بخطوتين */
+async function securitySheet() {
+  const body = h("div", { class: "stack" }, h("div", { class: "center" }, h("span", { class: "spinner" })));
+  const sheet = openSheet({ title: "🔐 الأمان", body });
+  const { data } = await sb.auth.mfa.listFactors();
+  const verified = (data?.totp || []).find((x) => x.status === "verified");
+  if (verified) {
+    const off = h("button", { class: "btn btn-danger btn-block", type: "button" }, "إلغاء التحقق بخطوتين");
+    off.addEventListener("click", async () => {
+      if (!(await confirmDialog("إلغاء التحقق بخطوتين يقلل حماية حساب المدير. متابعة؟", { okText: "إلغاء التفعيل", danger: true }))) return;
+      const r = await sb.auth.mfa.unenroll({ factorId: verified.id });
+      if (r.error) return toast("تعذر الإلغاء — سجّل الدخول من جديد ثم حاول", "error");
+      toast("تم إلغاء التحقق بخطوتين", "success"); sheet.close();
+    });
+    return fill(body, h("div", { class: "alert alert-info" }, "✅ التحقق بخطوتين مفعّل على هذا الحساب."), off);
+  }
+  const start = h("button", { class: "btn btn-primary btn-block", type: "button" }, "تفعيل التحقق بخطوتين");
+  fill(body, h("p", { style: { margin: "0" }, text: "يطلب رمزاً من تطبيق المصادقة على جوالك مع كل دخول، فما يقدر أحد يدخل حتى لو عرف كلمة المرور." }), start);
+  start.addEventListener("click", async () => {
+    start.disabled = true;
+    // تنظيف أي محاولة سابقة غير مكتملة
+    for (const f of (data?.totp || []).filter((x) => x.status !== "verified")) await sb.auth.mfa.unenroll({ factorId: f.id });
+    const { data: en, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: `admin-${Date.now()}` });
+    if (error || !en) { start.disabled = false; return toast("تعذر بدء التفعيل", "error"); }
+    const code = h("input", { class: "input pin-input", inputmode: "numeric", maxlength: "6", autocomplete: "one-time-code", placeholder: "••••••", "aria-label": "رمز التحقق" });
+    const ok = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, "تأكيد وتفعيل");
+    fill(body,
+      h("ol", { class: "stack", style: { margin: "0", "padding-inline-start": "20px" } },
+        h("li", {}, "افتح تطبيق المصادقة (Google Authenticator / Microsoft Authenticator)."),
+        h("li", {}, "امسح الرمز أو أدخل المفتاح يدوياً."),
+        h("li", {}, "اكتب الرمز المكون من 6 أرقام.")),
+      h("div", { class: "qr-wrap" }, qrCanvas(en.totp.uri, 360)),
+      h("div", { class: "copy-field" }, h("input", { class: "input", value: en.totp.secret, readonly: true, "aria-label": "المفتاح السري" }),
+        h("button", { class: "btn btn-soft", type: "button", onClick: () => copyText(en.totp.secret) }, "نسخ")),
+      code, ok);
+    ok.addEventListener("click", async () => {
+      const v = toLatinDigits(code.value).trim();
+      if (!/^\d{6}$/.test(v)) return toast("الرمز 6 أرقام", "error");
+      ok.disabled = true;
+      const r = await sb.auth.mfa.challengeAndVerify({ factorId: en.id, code: v });
+      if (r.error) { ok.disabled = false; return toast("الرمز غير صحيح، حاول مرة ثانية", "error"); }
+      toast("✅ تم تفعيل التحقق بخطوتين", "success"); sheet.close();
+    });
   });
 }
