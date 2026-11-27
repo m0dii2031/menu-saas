@@ -5,7 +5,7 @@
 import { CONFIG } from "./config.js";
 import {
   h, fill, $, toast, openSheet, copyText, money, moneyText, fmtDateMsg, t, initLang, setLang, isEn, num, oneLine, multiLine, isValidPhone, waLink,
-  initials, store as ls, applyTheme, openState, weekSchedule, tzWeekday, dayName, fmtTime12, fmtDateAr, tzParts, addDays, MODES,
+  initials, store as ls, applyTheme, openState, weekSchedule, tzWeekday, dayName, dayShort, fmtTime12, fmtDateAr, tzParts, addDays, MODES,
   createSb, rpc, withTimeout, debounce, getStoreSlug, toLatinDigits,
 } from "./common.js";
 import { EN } from "./i18n.js";
@@ -948,7 +948,7 @@ function openCheckout() {
     if (!S.cart.length) return toast(t("السلة فارغة"), "error");
     const who = validateNamePhone(f);
     if (!who) return;
-    const dist = zoneSel ? (zones[Number(zoneSel.value)]?.name || "") : oneLine(district.input.value, 60);
+    const dist = zoneSel ? (zoneSel.value === "" ? "" : zones[Number(zoneSel.value)]?.name || "") : oneLine(district.input.value, 60);
     const addr = oneLine(address.input.value, 160);
     if (st.type === "delivery" && zoneSel && !dist) {
       zoneSel.classList.add("invalid"); zoneSel.focus();
@@ -1160,7 +1160,7 @@ function availCalendar({ min, getBlocked, getRange, onPick }) {
         h("button", { type: "button", class: "rbtn", disabled: !canPrev, "aria-label": t("الشهر السابق"), onClick: () => { m -= 1; if (m < 0) { m = 11; y -= 1; } draw(); } }, isEn() ? "‹" : "›"),
         h("b", { text: monthLabel(y, m) }),
         h("button", { type: "button", class: "rbtn", "aria-label": t("الشهر التالي"), onClick: () => { m += 1; if (m > 11) { m = 0; y += 1; } draw(); } }, isEn() ? "›" : "‹")),
-      h("div", { class: "cal-grid cal-wd" }, [0, 1, 2, 3, 4, 5, 6].map((d) => h("span", { text: dayName(d).slice(0, isEn() ? 3 : 2) }))),
+      h("div", { class: "cal-grid cal-wd" }, [0, 1, 2, 3, 4, 5, 6].map((d) => h("span", { text: dayShort(d) }))),
       h("div", { class: "cal-grid" }, cells),
       h("div", { class: "cal-legend" }, h("span", {}, h("i", { class: "lg sel" }), t("اختيارك")), h("span", {}, h("i", { class: "lg busy" }), t("محجوز"))));
   };

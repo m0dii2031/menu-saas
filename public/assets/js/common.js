@@ -67,6 +67,7 @@ export const I18N = { lang: "ar", dict: {} };
 /** يترجم النص العربي (المفتاح هو النص العربي نفسه) مع دعم المتغيرات {name} */
 export function t(ar, vars) {
   let s = I18N.lang === "en" ? (I18N.dict[ar] ?? ar) : ar;
+  s = s.replace(/\|[a-z]+$/, ""); // مفاتيح سياقية مثل "العروض|tab"
   if (vars) s = s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? ""));
   return s;
 }
@@ -297,6 +298,8 @@ const toMin = (t) => { const [hh, mm] = String(t).split(":").map(Number); return
 export const WEEKDAYS_AR = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 export const WEEKDAYS_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 export const dayName = (d) => (I18N.lang === "en" ? WEEKDAYS_EN : WEEKDAYS_AR)[d];
+const WEEKDAYS_SHORT_AR = ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
+export const dayShort = (d) => (I18N.lang === "en" ? WEEKDAYS_EN[d].slice(0, 3) : WEEKDAYS_SHORT_AR[d]);
 
 /** يوم الأسبوع (0 = الأحد) بتوقيت المتجر */
 export function tzWeekday(tz, date = new Date()) {

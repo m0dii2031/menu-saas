@@ -21,10 +21,21 @@ let db;
 async function sql(q, params = []) { return (await db.query(q, params)).rows; }
 async function waitDb(q, pred, ms = 5000) { const t = Date.now(); let r; while (Date.now() - t < ms) { r = await sql(q); if (pred(r[0])) return r[0]; await new Promise((x) => setTimeout(x, 100)); } return r[0]; }
 
+const argTypes = {};
 async function callRpc(fn, args, admin) {
   const keys = Object.keys(args || {});
+  if (!argTypes[fn]) {
+    // like PostgREST: a JSON array sent to an array-typed parameter (uuid[]) becomes a Postgres array literal
+    const rows = await sql("select unnest(proargnames) n, unnest(proargtypes::regtype[]::text[]) t from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and proname = $1", [fn]);
+    argTypes[fn] = Object.fromEntries(rows.map((x) => [x.n, x.t]));
+  }
   const call = `select public.${fn}(${keys.map((k, i) => `${k} => $${i + 1}`).join(", ")}) as r`;
-  const vals = keys.map((k) => { const v = args[k]; return v === null || v === undefined ? null : typeof v === "object" ? JSON.stringify(v) : String(v); });
+  const vals = keys.map((k) => {
+    const v = args[k];
+    if (v === null || v === undefined) return null;
+    if (Array.isArray(v) && (argTypes[fn][k] || "").endsWith("[]")) return "{" + v.map((x) => JSON.stringify(String(x))).join(",") + "}";
+    return typeof v === "object" ? JSON.stringify(v) : String(v);
+  });
   await db.query("begin");
   try {
     await db.query(`set local role ${admin ? "authenticated" : "anon"}`);
@@ -493,6 +504,135 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await page.getByText("إرسال طلب الاستشارة عبر واتساب").click(); await page.getByText("تم تجهيز طلبك").waitFor();
   const lm = await lastWa(page);
   check("legal message", lm.includes("إشعار طلب استشارة ⚖️") && lm.includes("#LG-") && lm.includes("• النوع: عن بُعد") && lm.includes("نزاع مع شريك"));
+  await page.close();
+
+  /* ---------- 4b) V2: coupons, zones, min order, stock, sale price, orders log, reorder, calendar, hours ---------- */
+  console.log("\n[V2 features]");
+  const [{ id: v2 }] = await sql(`insert into stores (slug,name,whatsapp_phone,business_mode,theme_style,min_order,delivery_zones)
+    values ('v2shop','مطبخ الحي','966500000009','order','theme-restaurant',30,'[{"name":"النرجس","fee":10},{"name":"الملقا","fee":15}]') returning id`);
+  await sql(`insert into products (store_id,category,name,price,stock,options_json,sort_order) values
+    ($1,'وجبات','شاورما',15,2,'{"old_price":20}',1), ($1,'وجبات','عصير',5,null,'{}',2)`, [v2]);
+  const [{ tok: v2tok }] = await sql("select private.new_session($1, interval '1 hour', false) tok", [v2]);
+
+  // التاجر: إنشاء كوبون + ترتيب الأصناف
+  page = await newPage(browser, errors);
+  await page.goto(`${BASE}/manage?store=v2shop#t=${v2tok}`);
+  await page.locator(".pcard").first().waitFor();
+  await page.click(".bottom-nav >> text=العروض");
+  await page.getByText("+ كوبون").click();
+  await page.locator('.sheet label:has-text("الكود") input').fill("welcome");
+  await page.locator('.sheet label:has-text("نسبة الخصم") input').fill("10");
+  await page.getByText("إنشاء الكوبون").click();
+  await page.locator(".coupon-row", { hasText: "WELCOME" }).waitFor();
+  check("merchant creates coupon (uppercased)", (await sql("select code, kind, value from private.coupons where store_id=$1", [v2]))[0]?.code === "WELCOME");
+  await page.click(".bottom-nav >> text=المنيو");
+  await page.getByText("↕️ ترتيب").click();
+  await page.locator('button[aria-label="تحريك شاورما للأسفل"]').click();
+  const ord = await waitDb(`select string_agg(name, ',' order by sort_order) o from products where store_id='${v2}'`, (r) => r.o === "عصير,شاورما");
+  check("merchant reorders items with arrows", ord.o === "عصير,شاورما", ord.o);
+  await shot(page, "v2-merchant-reorder");
+  await page.close();
+
+  // العميل: سعر قبل الخصم، حد المخزون، المناطق، الحد الأدنى، الكوبون
+  page = await newPage(browser, errors);
+  await page.goto(`${BASE}/?store=v2shop`);
+  await page.locator(".hero-name").waitFor();
+  check("sale price shows old price struck through", (await page.locator(".product", { hasText: "شاورما" }).locator(".old-price").innerText()).includes("20"));
+  check("low stock badge", await page.locator(".product", { hasText: "شاورما" }).getByText("باقي 2 فقط").isVisible());
+  await page.locator(".product", { hasText: "شاورما" }).click();
+  await page.waitForTimeout(400);
+  for (let i = 0; i < 3; i++) await page.locator('.sheet .qty button[aria-label="زيادة"]').click();
+  check("stepper capped by stock", (await page.locator(".sheet .qty output").innerText()) === "2");
+  await page.locator(".sheet-foot .btn").click();
+  await page.locator(".cta-bar .btn").click();
+  await page.locator('.sheet label:has-text("الاسم") input').fill("سلمان");
+  await page.locator('.sheet label:has-text("رقم الجوال") input').fill("0511111111");
+  check("min order warning below 30 (subtotal 30 ok)", !(await page.locator(".min-warn").count()));
+  await page.getByText("إرسال الطلب عبر واتساب").click();
+  check("zone must be chosen", await page.getByText("اختر الحي من القائمة").isVisible() && (await page.evaluate(() => window.__opened.length)) === 0);
+  await page.locator('.sheet label:has-text("الحي") select').selectOption("1");
+  await page.locator('.sheet input[placeholder="كود الخصم"]').fill("welcome");
+  await page.locator(".sheet").getByRole("button", { name: "تطبيق" }).click();
+  await page.getByText("تم تطبيق الكود WELCOME").waitFor();
+  const billTxt = await page.locator(".bill").innerText();
+  check("bill: zone fee 15 + coupon -3 = 42", billTxt.includes("15") && billTxt.includes("-3") && billTxt.includes("42"), billTxt.replace(/\n/g, " | "));
+  await shot(page, "v2-checkout-coupon-zone");
+  await page.waitForTimeout(31000); // مهلة الإرسال من طلب سابق في نفس المتصفح
+  await page.getByText("إرسال الطلب عبر واتساب").click();
+  await page.getByText("تم تجهيز طلبك").waitFor();
+  const v2msg = await lastWa(page);
+  check("message has discount, zone fee and total", v2msg.includes("• الخصم (WELCOME): -3.00 ﷼") && v2msg.includes("• التوصيل: 15.00 ﷼") && v2msg.includes("• الإجمالي: *42.00 ﷼*") && v2msg.includes("📍 العنوان: الملقا"));
+  const [after] = await sql("select (select stock from products where name='شاورما' and store_id=$1) stock, (select used from private.coupons where store_id=$1) used", [v2]);
+  check("order decrements stock and counts coupon use", after.stock === 0 && after.used === 1, JSON.stringify(after));
+  await page.goto(`${BASE}/?store=v2shop`); await page.locator(".hero-name").waitFor();
+  check("sold-out item shown unavailable", await page.locator(".product.unavailable", { hasText: "شاورما" }).count() === 1);
+  await page.close();
+
+  // التاجر: سجل الطلبات + الإلغاء يرجع المخزون + الإحصائيات
+  page = await newPage(browser, errors);
+  await page.goto(`${BASE}/manage?store=v2shop#t=${v2tok}`);
+  await page.locator(".orders-btn .nbadge").waitFor();
+  check("new-orders badge on header", (await page.locator(".orders-btn .nbadge").innerText()) === "1");
+  await page.locator(".orders-btn").click();
+  await page.locator(".ocard").first().waitFor();
+  const oc = await page.locator(".ocard").first().innerText();
+  check("orders log shows order details", oc.includes("#ORD-1001") && oc.includes("سلمان") && oc.includes("WELCOME") && oc.includes("الملقا"), oc.split("\n").slice(0, 3).join(" | "));
+  await shot(page, "v2-orders-log");
+  await page.locator(".ocard").first().getByRole("button", { name: "إلغاء" }).click();
+  await page.locator(".sheet").last().locator(".sheet-foot .btn").first().click();
+  const rs = await waitDb(`select stock from products where name='شاورما' and store_id='${v2}'`, (r) => r.stock === 2);
+  check("cancel restores stock", rs.stock === 2);
+  await page.keyboard.press("Escape");
+  await page.locator(".p-stat").first().click();
+  await page.locator(".chart-bars .bar").first().waitFor();
+  check("insights: 14 daily bars, cancelled order excluded from top items", (await page.locator(".chart-bars").first().locator(".bar").count()) === 14 && (await page.locator(".hbar").count()) === 0 && await page.getByText("لا توجد بيانات بعد").isVisible());
+  await shot(page, "v2-insights");
+  await page.close();
+
+  // التقويم: الأيام المحجوزة
+  const [{ d0, d1, d2 }] = await sql("select to_char((now() at time zone 'Asia/Riyadh')::date,'YYYY-MM-DD') d0, to_char((now() at time zone 'Asia/Riyadh')::date+1,'YYYY-MM-DD') d1, extract(day from (now() at time zone 'Asia/Riyadh')::date+2)::int d2");
+  await sql(`update products set options_json = options_json || jsonb_build_object('blocked_dates', jsonb_build_array($1::text, $2::text)) where name='شاليه الياسمين'`, [d0, d1]);
+  page = await newPage(browser, errors);
+  await page.goto(`${BASE}/?store=oasis`); await page.locator(".listing").first().waitFor();
+  await page.locator(".listing").first().click(); await page.getByText("احجز هذه الوحدة").click();
+  await page.locator(".cal").waitFor();
+  const selDay = await page.locator(".cal-day.sel").first().innerText().catch(() => "");
+  check("booking calendar skips booked days", (await page.locator(".cal-day.busy").count()) >= 1 && selDay === String(d2), `sel=${selDay} expected=${d2}`);
+  await shot(page, "v2-booking-calendar");
+  await page.close();
+
+  // أوقات لكل يوم: مفتوح بكرة فقط
+  const [{ wd }] = await sql("select extract(dow from (now() at time zone 'Asia/Riyadh')::date + 1)::int wd");
+  await sql(`update stores set hours_json = jsonb_build_object($1::text, jsonb_build_array(jsonb_build_object('o','10:00','c','22:00'))) where slug='itqan'`, [String(wd)]);
+  page = await newPage(browser, errors);
+  await page.goto(`${BASE}/?store=itqan`); await page.locator(".hero-name").waitFor();
+  check("per-day hours: closed today, opens tomorrow", await page.getByText("يفتح بكرة الساعة").isVisible());
+  await page.close();
+
+  // الإنجليزية في اللوحات
+  page = await newPage(browser, errors);
+  await page.goto(`${BASE}/manage?store=v2shop&lang=en#t=${v2tok}`);
+  await page.locator(".pcard").first().waitFor();
+  const mEn = await page.evaluate(() => ({ dir: document.documentElement.dir, body: document.body.innerText }));
+  check("merchant dashboard in English (LTR)", mEn.dir === "ltr" && mEn.body.includes("Menu") && mEn.body.includes("Visits today") && !mEn.body.includes("زيارات اليوم"));
+  await shot(page, "v2-merchant-en");
+  await page.close();
+
+  // الإدارة: سجل العمليات + الحذف النهائي
+  page = await newPage(browser, errors);
+  await page.goto(`${BASE}/admin`);
+  await page.fill('input[type="email"]', "admin@test.com"); await page.fill('input[type="password"]', "secret"); await page.click('button[type="submit"]');
+  await page.locator(".scard").first().waitFor();
+  await page.locator('[aria-label="سجل العمليات"]').click();
+  await page.locator(".audit-row").first().waitFor();
+  check("admin audit log lists actions", (await page.locator(".audit-row").count()) >= 2);
+  await page.keyboard.press("Escape");
+  await page.locator(".scard", { hasText: "مطبخ الحي" }).getByText("✏️ تعديل / PIN").click();
+  await page.getByText("🗑️ حذف المتجر نهائياً").click();
+  await page.locator('.sheet input[placeholder="v2shop"]').fill("v2shop");
+  await page.getByText("حذف نهائي").click();
+  await page.getByText("نهائياً").first().waitFor();
+  check("admin deletes store after typing slug", (await waitDb("select count(*)::int c from stores where slug='v2shop'", (r) => r.c === 0)).c === 0);
   await page.close();
 
   /* ---------- 5) Closed / overnight hours / suspended ---------- */

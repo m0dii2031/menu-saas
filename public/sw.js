@@ -1,9 +1,9 @@
 // Service Worker: تحميل فوري للواجهة + عمل جزئي دون اتصال.
 // لا يتم تخزين أي طلبات Supabase (بيانات حية دائماً).
-const VERSION = "menu-v4";
+const VERSION = "menu-v5";
 const SHELL = [
   "/", "/index.html", "/assets/css/app.css", "/assets/css/store.css", "/assets/img/order-success.svg", "/assets/js/config.js", "/assets/js/common.js",
-  "/assets/js/store.js", "/assets/js/i18n.js", "/assets/fonts/saudi-riyal.woff2", "/assets/fonts/saudi-riyal-bold.woff2", "/assets/icons/icon-192.png", "/assets/icons/icon-512.png",
+  "/assets/js/store.js", "/assets/js/i18n.js", "/assets/js/i18n-panel.js", "/assets/fonts/saudi-riyal.woff2", "/assets/fonts/saudi-riyal-bold.woff2", "/assets/icons/icon-192.png", "/assets/icons/icon-512.png",
 ];
 
 self.addEventListener("install", (e) => {

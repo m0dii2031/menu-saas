@@ -74,6 +74,7 @@ export const EN = {
   // الهيكل
   "المنيو": "Menu",
   "الإعدادات": "Settings",
+  "العروض|tab": "Offers",
   "التصميم": "Design",
   "إعدادات المتجر": "Store settings",
   "التصميم والهوية": "Design & branding",

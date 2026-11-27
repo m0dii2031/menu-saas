@@ -4,7 +4,7 @@
 // =========================================================
 import { CONFIG } from "./config.js";
 import {
-  h, fill, t, initLang, setLang, isEn, tMode, $, toast, openSheet, confirmDialog, money, num, oneLine, initials, store as ls, applyTheme, THEMES, MODES,
+  h, fill, t, initLang, setLang, isEn, tMode, dayShort, $, toast, openSheet, confirmDialog, money, num, oneLine, initials, store as ls, applyTheme, THEMES, MODES,
   createSb, rpc, friendlyError, compressImage, uploadImage, blobToBase64, pickFile, callFunction,
   getStoreSlug, daysLeft, fmtTime12, toLatinDigits, copyText, normalizePhone,
 } from "./common.js";
@@ -135,13 +135,13 @@ const TABS = [
   { id: "menu", icon: "🍽️", label: t("المنيو") },
   { id: "settings", icon: "⚙️", label: t("الإعدادات") },
   { id: "design", icon: "🎨", label: t("التصميم") },
-  { id: "offers", icon: "📣", label: t("العروض") },
+  { id: "offers", icon: "📣", label: t("العروض|tab") },
 ];
 
 function renderShell() {
   const s = D.store;
   const mode = tMode(s.business_mode);
-  TABS[0].label = mode.items === "الأصناف" ? t("المنيو") : mode.items;
+  TABS[0].label = s.business_mode === "order" ? t("المنيو") : mode.items;
   TABS[0].icon = mode.icon;
   const tabTitle = { menu: TABS[0].label, settings: t("إعدادات المتجر"), design: t("التصميم والهوية"), offers: t("العروض والبنرات") }[tab];
 
@@ -1049,7 +1049,7 @@ function blockedDatesField(dates) {
         h("button", { type: "button", class: "rbtn", "aria-label": t("الشهر السابق"), onClick: () => { m -= 1; if (m < 0) { m = 11; y -= 1; } draw(); } }, "›"),
         h("b", { text: new Date(Date.UTC(y, m, 1)).toLocaleDateString("ar-u-ca-gregory-nu-latn", { month: "long", year: "numeric", timeZone: "UTC" }) }),
         h("button", { type: "button", class: "rbtn", "aria-label": t("الشهر التالي"), onClick: () => { m += 1; if (m > 11) { m = 0; y += 1; } draw(); } }, "‹")),
-      h("div", { class: "cal-grid cal-wd" }, WD.map((w) => h("span", { text: w.slice(0, 2) }))),
+      h("div", { class: "cal-grid cal-wd" }, [0, 1, 2, 3, 4, 5, 6].map((d) => h("span", { text: dayShort(d) }))),
       h("div", { class: "cal-grid" }, cells));
   };
   draw();
