@@ -6,7 +6,7 @@ const path = require("path");
 const http = require("http");
 
 const PUB = path.resolve(__dirname, "../../public");
-const MIGRATION = path.resolve(__dirname, "../../supabase/migrations/20261126000000_init.sql");
+const MIGRATIONS = ["20261126000000_init.sql", "20261127000000_features.sql"].map((f) => path.resolve(__dirname, "../../supabase/migrations", f));
 const PG = { host: process.env.PGHOST || "/var/run/postgresql", port: Number(process.env.PGPORT || 5432), user: process.env.PGUSER || "postgres" };
 const NM = path.resolve(__dirname, "node_modules");
 const OUT = process.env.OUT || path.resolve(__dirname, "shots");
@@ -172,7 +172,7 @@ const lastWa = async (page) => { const u = (await page.evaluate(() => window.__o
   await db.connect();
   for (const r of ["anon", "authenticated", "service_role"]) await db.query(`do $$ begin create role ${r} nologin; exception when duplicate_object then null; end $$`);
   await db.query(fs.readFileSync(path.resolve(__dirname, "supabase-stubs.sql"), "utf8").replace(/create role[^;]+;/g, "").replace(/create publication[^;]+;/, ""));
-  await db.query(fs.readFileSync(MIGRATION, "utf8"));
+  for (const m of MIGRATIONS) await db.query(fs.readFileSync(m, "utf8"));
   await db.query("insert into private.admins values ($1)", [ADMIN_UID]);
 
   const server = staticServer();

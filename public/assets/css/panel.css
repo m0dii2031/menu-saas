@@ -146,3 +146,53 @@ body.panel { background: var(--bg); }
 .exp-bar i { display: block; height: 100%; border-radius: 6px; background: var(--success); }
 .exp-bar i.warn { background: var(--warning); }
 .exp-bar i.bad { background: var(--danger); }
+
+/* =========================================================
+   الإصدار 2: الطلبات، الإحصائيات، الكوبونات، الأوقات، التقويم
+   ========================================================= */
+button.p-stat { border: 0; font: inherit; color: inherit; cursor: pointer; }
+button.p-stat:active { transform: scale(.97); }
+.orders-btn { position: relative; }
+.nbadge { position: absolute; top: -4px; inset-inline-end: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: #e11d48; color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
+
+.ocard { background: var(--card); border: 1.5px solid var(--border); border-inline-start: 5px solid var(--warning); border-radius: 18px; padding: 12px 14px; display: grid; gap: 8px; }
+.ocard.st-confirmed { border-inline-start-color: var(--primary); }
+.ocard.st-done { border-inline-start-color: var(--success); }
+.ocard.st-cancelled { border-inline-start-color: var(--danger); opacity: .8; }
+.o-head { display: flex; align-items: center; gap: 8px; }
+.o-head b { font-size: 16px; }
+.o-lines { display: grid; gap: 3px; font-size: 13px; }
+.o-note { background: var(--bg); border-radius: 10px; padding: 6px 10px; }
+.o-items { display: grid; gap: 4px; font-size: 13px; background: var(--bg); border-radius: 12px; padding: 8px 10px; }
+.o-total { font-size: 14px; }
+.o-total b { font-size: 16px; color: var(--primary); }
+.o-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.o-actions .btn { flex: 1 1 auto; }
+
+.chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding-top: 16px; }
+.chart-bars.hours { height: 90px; gap: 2px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+.bar-col .bar { width: 100%; max-width: 26px; background: linear-gradient(to top, var(--primary), color-mix(in srgb, var(--primary) 60%, #fff)); border-radius: 6px 6px 2px 2px; }
+.bar-v { font-size: 10px; font-weight: 800; color: var(--muted); }
+.bar-l { font-size: 10px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.hbar { display: grid; gap: 4px; }
+.hbar-track { height: 8px; border-radius: 8px; background: var(--bg); overflow: hidden; }
+.hbar-track i { display: block; height: 100%; border-radius: 8px; background: var(--primary); }
+
+.coupon-row { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 14px; background: var(--bg); }
+.coupon-row .code { font-family: ui-monospace, Menlo, monospace; font-size: 15px; letter-spacing: 1px; }
+
+.day-row { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; display: grid; gap: 8px; }
+.day-row.off { background: var(--bg); }
+.day-row.off b { color: var(--muted); }
+.shift { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: center; }
+.shift span { color: var(--muted); }
+.pc-meta span.out { background: #fee2e2; color: #b91c1c; }
+
+.cal { border: 1px solid var(--border); border-radius: 16px; padding: 10px; display: grid; gap: 6px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-wd span { font-size: 11px; color: var(--muted); text-align: center; font-weight: 700; }
+.cal-day { height: 36px; border: 0; border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+.cal-day:disabled { opacity: .35; cursor: default; }
+.cal-day.busy { background: #fee2e2; color: #b91c1c; text-decoration: line-through; }

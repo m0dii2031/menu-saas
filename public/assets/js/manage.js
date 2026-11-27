@@ -6,7 +6,7 @@ import { CONFIG } from "./config.js";
 import {
   h, fill, $, toast, openSheet, confirmDialog, money, num, oneLine, initials, store as ls, applyTheme, THEMES, MODES,
   createSb, rpc, friendlyError, compressImage, uploadImage, blobToBase64, pickFile, callFunction,
-  getStoreSlug, daysLeft, fmtTime12, toLatinDigits, copyText,
+  getStoreSlug, daysLeft, fmtTime12, toLatinDigits, copyText, normalizePhone,
 } from "./common.js";
 
 const slug = getStoreSlug();
@@ -17,6 +17,7 @@ const TOKEN_KEY = `mtoken_${slug}`;
 let token = null;
 let D = null;          // بيانات اللوحة
 let tab = ls.get("manage_tab", "menu", true) || "menu";
+let reorderMode = false;
 
 boot();
 
@@ -140,14 +141,15 @@ function renderShell() {
     h("div", { class: "p-top" },
       s.logo_url ? h("img", { class: "p-logo", src: s.logo_url, alt: "" }) : h("div", { class: "p-logo" }, initials(s.name)),
       h("div", { class: "p-title" }, h("h1", { text: s.name }), h("div", { class: "sub", text: `${mode.icon} ${mode.label} • ${tabTitle}` })),
+      h("button", { class: "hbtn orders-btn", type: "button", "aria-label": "سجل الطلبات", title: "سجل الطلبات", onClick: () => openOrders("new") }, "🧾", h("span", { class: "nbadge", hidden: true })),
       h("a", { class: "hbtn", href: `/?store=${slug}`, target: "_blank", rel: "noopener", "aria-label": "عرض المتجر", title: "عرض المتجر" }, "👁️"),
       h("button", { class: "hbtn", type: "button", "aria-label": "تسجيل الخروج", title: "خروج", onClick: logout }, "🚪")));
 
   const t = D.stats.today, m = D.stats.last_30d;
   const stats = h("div", { class: "p-stats" },
-    h("div", { class: "p-stat" }, h("span", { class: "i" }, "👀"), h("b", { text: String(t.views) }), h("span", {}, "زيارات اليوم")),
-    h("div", { class: "p-stat" }, h("span", { class: "i" }, "🧾"), h("b", { text: String(t.orders) }), h("span", {}, "طلبات اليوم")),
-    h("div", { class: "p-stat" }, h("span", { class: "i" }, "💰"), h("b", { text: money(m.revenue) }), h("span", {}, `${m.orders} طلب / 30 يوم`)));
+    h("button", { class: "p-stat", type: "button", onClick: openInsights, "aria-label": "الإحصائيات" }, h("span", { class: "i" }, "👀"), h("b", { text: String(t.views) }), h("span", {}, "زيارات اليوم")),
+    h("button", { class: "p-stat", type: "button", onClick: () => openOrders("new"), "aria-label": "سجل الطلبات" }, h("span", { class: "i" }, "🧾"), h("b", { text: String(t.orders) }), h("span", {}, "طلبات اليوم")),
+    h("button", { class: "p-stat", type: "button", onClick: openInsights, "aria-label": "الإحصائيات" }, h("span", { class: "i" }, "📊"), h("b", { text: money(m.revenue) }), h("span", {}, `${m.orders} طلب / 30 يوم`)));
 
   const content = h("div", { class: "p-body", id: "tab-content" });
   const days = daysLeft(s.expires_at);
@@ -167,6 +169,11 @@ function renderShell() {
 
   fill(root, header, stats, content, nav);
   ({ menu: tabMenu, settings: tabSettings, design: tabDesign, offers: tabOffers })[tab](panel);
+  // شارة عدد الطلبات الجديدة
+  rpc(sb, "merchant_list_orders", { p_token: token, p_status: "new", p_limit: 1 }).then((r) => {
+    const n = r?.counts?.new || 0, b = header.querySelector(".nbadge");
+    if (b && n) { b.hidden = false; b.textContent = n > 99 ? "99+" : String(n); }
+  }).catch(() => {});
 }
 
 async function logout() {
@@ -261,7 +268,7 @@ function rowsEditor(rows, cols, addLabel) {
 function tabMenu(panel) {
   const s = D.store;
   const mode = MODES[s.business_mode];
-  const products = D.products;
+  const products = [...D.products].sort((a, b) => a.sort_order - b.sort_order);
 
   root.append(h("button", { class: "fab", type: "button", "aria-label": `إضافة ${mode.item}`, onClick: () => productForm(null) },
     h("span", { class: "plus", "aria-hidden": "true" }, "+"), `إضافة ${mode.item}`));
@@ -290,7 +297,10 @@ function tabMenu(panel) {
 
   const search = input({ type: "search", placeholder: `بحث في ${mode.items}...`, "aria-label": "بحث" });
   const listWrap = h("div", { class: "stack" });
-  panel.append(seg);
+  const sortBtn = h("button", { class: `btn btn-sm ${reorderMode ? "btn-primary" : "btn-outline"}`, type: "button", onClick: () => { reorderMode = !reorderMode; renderShell(); } },
+    reorderMode ? "✔️ تم الترتيب" : "↕️ ترتيب");
+  panel.append(h("div", { class: "row" }, h("div", { class: "grow" }, seg), products.length > 1 ? sortBtn : null));
+  if (reorderMode) panel.append(h("div", { class: "alert alert-info" }, "استخدم الأسهم لترتيب الأصناف والأقسام — يتغير الترتيب في المتجر فوراً."));
   if (products.length > 8) panel.append(h("div", { class: "search-box" }, h("span", { class: "i", "aria-hidden": "true" }, "🔍"), search));
   panel.append(listWrap);
 
@@ -307,8 +317,12 @@ function tabMenu(panel) {
     }
     if (!groups.size) return fill(listWrap, h("div", { class: "card center muted" }, "لا توجد عناصر في هذا التصنيف"));
     fill(listWrap, ...[...groups.entries()].map(([cat, items]) => h("div", { class: "stack", style: { gap: "10px" } },
-      h("div", { class: "sec-title" }, h("b", { text: cat }), h("span", { text: `${items.length} ${mode.item}` })),
-      ...items.map(itemRow))));
+      h("div", { class: "sec-title" }, h("b", { text: cat }),
+        reorderMode ? h("span", { class: "row", style: { gap: "6px" } },
+          h("button", { class: "rbtn", type: "button", "aria-label": `تحريك قسم ${cat} للأعلى`, onClick: () => moveCategory(items[0].category || "", -1) }, "▲"),
+          h("button", { class: "rbtn", type: "button", "aria-label": `تحريك قسم ${cat} للأسفل`, onClick: () => moveCategory(items[0].category || "", 1) }, "▼"))
+          : h("span", { text: `${items.length} ${mode.item}` })),
+      ...items.map((p) => itemRow(p)))));
   };
   search.addEventListener("input", draw);
   draw();
@@ -346,6 +360,8 @@ function itemRow(p) {
   if (p.category) meta.push(h("span", {}, "📂 ", p.category));
   if (hasSizes) meta.push(h("span", {}, "📏 ", `${p.options_json.sizes.length} أحجام`));
   if ((p.options_json?.addons || []).length) meta.push(h("span", {}, "➕ ", `${p.options_json.addons.length} إضافات`));
+  if (p.stock != null) meta.push(h("span", { class: p.stock === 0 ? "out" : "" }, "📦 ", p.stock === 0 ? "نفدت الكمية" : `${p.stock} متوفر`));
+  if (num(p.options_json?.old_price) > 0) meta.push(h("span", {}, "🏷️ ", "عليه خصم"));
 
   row.append(
     h("div", { class: "pc-media" }, p.image_url ? h("img", { src: p.image_url, alt: "", loading: "lazy" }) : "🍽️"),
@@ -355,8 +371,10 @@ function itemRow(p) {
       h("div", { class: "pc-foot" },
         h("div", { class: "pc-price" }, hasSizes ? h("span", { text: `من ${money(minSize)}` }) : [priceInp, h("span", { class: "small" }, CONFIG.CURRENCY)]),
         h("label", { class: "pc-toggle" }, stateLbl, sw.el))),
-    h("div", { class: "pc-actions" },
-      h("button", { class: "rbtn", type: "button", "aria-label": "تعديل", onClick: () => productForm(p) }, "✏️"), del));
+    h("div", { class: "pc-actions" }, reorderMode
+      ? [h("button", { class: "rbtn", type: "button", "aria-label": `تحريك ${p.name} للأعلى`, onClick: () => moveProduct(p, -1) }, "▲"),
+         h("button", { class: "rbtn", type: "button", "aria-label": `تحريك ${p.name} للأسفل`, onClick: () => moveProduct(p, 1) }, "▼")]
+      : [h("button", { class: "rbtn", type: "button", "aria-label": "تعديل", onClick: () => productForm(p) }, "✏️"), del]));
   return row;
 }
 
@@ -382,7 +400,7 @@ function productForm(p) {
     image.el,
   ];
 
-  let sizes, addons, specs, unitSel, gallery;
+  let sizes, addons, specs, unitSel, gallery, blocked, oldPriceIn, stockIn;
   const priceLabel = { order: "السعر", booking: "السعر لكل وحدة زمنية", inquiry: "السعر (اختياري)", charity: "قيمة السهم (اختياري)", legal: "رسوم الاستشارة (اختياري)" }[modeId];
 
   if (modeId === "booking" || modeId === "inquiry") {
@@ -391,6 +409,13 @@ function productForm(p) {
     body.push(h("div", { class: "row" }, h("div", { class: "grow" }, field(priceLabel, price)), h("div", { style: { width: "120px" } }, field("لكل", unitSel))));
   } else {
     body.push(field(priceLabel, price, modeId === "order" ? "إذا أضفت أحجاماً سيُعتمد سعر الحجم المختار" : null));
+  }
+  if (modeId === "order") {
+    oldPriceIn = input({ type: "number", inputmode: "decimal", min: "0", step: "0.01", value: o.old_price ? String(num(o.old_price)) : "", placeholder: "اختياري" });
+    stockIn = input({ type: "number", inputmode: "numeric", min: "0", step: "1", value: p?.stock != null ? String(p.stock) : "", placeholder: "غير محدود" });
+    body.push(h("div", { class: "row" },
+      h("div", { class: "grow" }, field("السعر قبل الخصم", oldPriceIn, "يظهر مشطوباً بجانب السعر")),
+      h("div", { class: "grow" }, field("الكمية المتوفرة", stockIn, "تنقص مع كل طلب"))));
   }
 
   if (modeId === "order") {
@@ -405,6 +430,10 @@ function productForm(p) {
     body.push(h("div", { class: "field" }, h("span", { class: "label" }, "المواصفات"), specs.el));
     gallery = galleryField(p?.gallery_json || []);
     body.push(gallery.el);
+  }
+  if (modeId === "booking") {
+    blocked = blockedDatesField(o.blocked_dates);
+    body.push(blocked.el);
   }
   body.push(h("div", { class: "row between card", style: { "box-shadow": "none" } }, h("b", {}, "ظاهر للعملاء"), avail.el));
 
@@ -428,7 +457,10 @@ function productForm(p) {
         ...(addons ? { addons: addons.get() } : {}),
         ...(specs ? { specs: specs.get() } : {}),
         ...(unitSel && unitSel.value ? { unit: unitSel.value } : {}),
+        ...(oldPriceIn && num(oldPriceIn.value) > 0 ? { old_price: String(num(oldPriceIn.value)) } : {}),
+        ...(blocked ? { blocked_dates: blocked.get() } : {}),
       },
+      stock: stockIn && stockIn.value !== "" ? String(Math.max(0, Math.floor(num(stockIn.value)))) : null,
       is_available: avail.input.checked,
     };
     saveBtn.disabled = true;
@@ -544,44 +576,41 @@ function tabSettings(panel) {
   const fee = input({ type: "number", inputmode: "decimal", min: "0", step: "0.5", value: String(num(s.delivery_fee)) });
   const iban = input({ value: s.iban_number || "", dir: "ltr", maxlength: "40", placeholder: "SA00 0000 0000 0000 0000 0000" });
 
-  const allDay = !s.open_time;
-  const allDaySw = switchEl(allDay, (c) => { timesRow.hidden = c; }, "مفتوح 24 ساعة");
-  const openT = input({ type: "time", value: s.open_time || "16:00" });
-  const closeT = input({ type: "time", value: s.close_time || "02:00" });
-  const timesRow = h("div", { class: "row", hidden: allDay },
-    h("div", { class: "grow" }, field("يفتح", openT)), h("div", { class: "grow" }, field("يغلق", closeT)));
-  const hoursHint = h("div", { class: "hint" });
-  const updHint = () => {
-    hoursHint.textContent = openT.value && closeT.value && closeT.value <= openT.value
-      ? `دوام ممتد لما بعد منتصف الليل: من ${fmtTime12(openT.value)} حتى ${fmtTime12(closeT.value)} اليوم التالي` : "";
-  };
-  openT.addEventListener("input", updHint); closeT.addEventListener("input", updHint); updHint();
+  const hours = hoursEditor(s);
+  const minOrder = input({ type: "number", inputmode: "decimal", min: "0", step: "1", value: String(num(s.min_order)) });
+  const zones = rowsEditor(s.delivery_zones || [], [{ key: "name", placeholder: "اسم الحي", max: 40 }, { key: "fee", placeholder: "الرسوم", type: "number" }], "إضافة حي");
 
   const card = h("div", { class: "card stack" }, h("h2", { class: "card-title" }, "بيانات المتجر"),
     field("اسم المتجر", name), field("نوع النشاط", type), logo.el,
     field("رقم واتساب لاستقبال الطلبات", phone, "مثال: 0501234567 أو 966501234567"),
-    s.business_mode === "order" ? field(`رسوم التوصيل (${CONFIG.CURRENCY})`, fee, "اكتب 0 للتوصيل المجاني") : null,
     (s.business_mode === "charity" || s.business_mode === "order") ? field(s.business_mode === "charity" ? "الآيبان الرسمي للتبرعات" : "الآيبان (للدفع بالتحويل - اختياري)", iban) : null);
 
-  const hoursCard = h("div", { class: "card stack" }, h("h2", { class: "card-title" }, "أوقات العمل"),
-    h("div", { class: "row between" }, h("span", {}, "مفتوح 24 ساعة"), allDaySw.el), timesRow, hoursHint);
+  const deliveryCard = s.business_mode === "order" ? h("div", { class: "card stack" }, h("h2", { class: "card-title" }, "🛵 التوصيل"),
+    field(`رسوم التوصيل (${CONFIG.CURRENCY})`, fee, "تُستخدم إذا ما أضفت أحياء. اكتب 0 للتوصيل المجاني"),
+    field(`الحد الأدنى لطلبات التوصيل (${CONFIG.CURRENCY})`, minOrder, "اكتب 0 بدون حد أدنى"),
+    h("div", { class: "field" }, h("span", { class: "label" }, "مناطق التوصيل (اختياري)"), zones.el,
+      h("span", { class: "hint", text: "إذا أضفت أحياء، يختار العميل حيّه من قائمة ويُحسب سعر التوصيل حسب الحي." }))) : null;
 
   const saveBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, "💾 حفظ الإعدادات");
   saveBtn.addEventListener("click", async () => {
     if (oneLine(name.value, 80).length < 2) return toast("اسم المتجر مطلوب", "error");
+    let hrs;
+    try { hrs = hours.get(); } catch (e) { return toast(e.message, "error"); }
     const patch = {
       name: oneLine(name.value, 80), business_type: oneLine(type.value, 60), logo_url: logo.get(),
-      whatsapp_phone: phone.value,
-      open_time: allDaySw.input.checked ? "" : openT.value, close_time: allDaySw.input.checked ? "" : closeT.value,
+      whatsapp_phone: phone.value, ...hrs,
     };
-    if (!allDaySw.input.checked && (!openT.value || !closeT.value)) return toast("حدد وقت الفتح والإغلاق", "error");
-    if (s.business_mode === "order") patch.delivery_fee = String(num(fee.value));
+    if (s.business_mode === "order") {
+      patch.delivery_fee = String(num(fee.value));
+      patch.min_order = String(num(minOrder.value));
+      patch.delivery_zones = zones.get().map((z) => ({ name: z.name, fee: String(z.fee) }));
+    }
     if (s.business_mode === "charity" || s.business_mode === "order") patch.iban_number = iban.value;
     saveBtn.disabled = true;
     try { await save("merchant_update_store", { p_patch: patch }); await loadDash(); } catch { /* handled */ } finally { saveBtn.disabled = false; }
   });
 
-  panel.append(card, hoursCard, saveBtn, pinCard(), linksCard());
+  panel.append(...[card, deliveryCard, hours.el, saveBtn, pinCard(), linksCard()].filter(Boolean));
 }
 
 function pinCard() {
@@ -725,4 +754,327 @@ function tabOffers(panel) {
     h("div", { class: "card stack" }, h("h2", { class: "card-title" }, "⏱️ عداد تنازلي للعرض"),
       seg, custom, statusLine, h("div", { class: "hint", text: "يختفي البنر تلقائياً من المتجر عند انتهاء المدة." })),
     saveBtn);
+  if (s.business_mode === "order") panel.append(couponsCard());
+}
+
+/* =========================================================
+   الإصدار 2: سجل الطلبات، الإحصائيات، الكوبونات، أوقات العمل لكل يوم،
+   مناطق التوصيل، المخزون، أيام الحجز المحجوزة، ترتيب الأصناف
+   ========================================================= */
+const ORDER_PREFIX = { order: "ORD", booking: "BK", inquiry: "RQ", charity: "DN", legal: "LG" };
+const STATUS = {
+  new: { label: "جديد", cls: "badge-warning" },
+  confirmed: { label: "مؤكد", cls: "badge" },
+  done: { label: "مكتمل", cls: "badge-success" },
+  cancelled: { label: "ملغي", cls: "badge-danger" },
+};
+const WD = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+function timeAgo(iso) {
+  const sec = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return "الآن";
+  if (sec < 3600) return `قبل ${Math.floor(sec / 60)} دقيقة`;
+  if (sec < 86400) return `قبل ${Math.floor(sec / 3600)} ساعة`;
+  return new Date(iso).toLocaleString("ar-u-ca-gregory-nu-latn", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/* ---------------- سجل الطلبات ---------------- */
+async function openOrders(initial = "new") {
+  let status = initial;
+  let before = null;
+  const tabsEl = h("div", { class: "status-tabs", role: "tablist" });
+  const list = h("div", { class: "stack" });
+  const more = h("button", { class: "btn btn-block", type: "button", hidden: true }, "عرض المزيد");
+  const sheet = openSheet({ title: "🧾 سجل الطلبات", body: [tabsEl, list, more], className: "orders-sheet" });
+
+  async function load(reset) {
+    if (reset) { before = null; fill(list, h("div", { class: "center muted" }, h("span", { class: "spinner" }))); }
+    let r;
+    try {
+      r = await rpc(sb, "merchant_list_orders", { p_token: token, p_status: status === "all" ? null : status, p_limit: 20, p_before: before });
+    } catch (e) { return fill(list, h("div", { class: "alert alert-danger" }, friendlyError(e))); }
+    const c = r.counts || {};
+    fill(tabsEl, ...[["new", "جديد"], ["confirmed", "مؤكد"], ["done", "مكتمل"], ["cancelled", "ملغي"], ["all", "الكل"]].map(([k, l]) =>
+      h("button", { type: "button", class: status === k ? "active" : "", onClick: () => { status = k; load(true); } },
+        k === "all" ? l : `${l} (${c[k] ?? 0})`)));
+    if (reset) fill(list);
+    if (reset && !r.orders.length) {
+      list.append(h("div", { class: "empty-state" }, h("img", { src: "/assets/img/empty.svg", alt: "" }), h("b", {}, "لا توجد طلبات هنا"),
+        h("span", { class: "muted small" }, "تظهر الطلبات هنا تلقائياً أول ما يضغط العميل إرسال عبر واتساب")));
+    }
+    r.orders.forEach((o) => list.append(orderCard(o, () => load(true))));
+    before = r.orders.length ? r.orders[r.orders.length - 1].id : before;
+    more.hidden = r.orders.length < 20;
+  }
+  more.addEventListener("click", () => load(false));
+  await load(true);
+  return sheet;
+}
+
+function orderCard(o, reload) {
+  const m = o.meta || {};
+  const mode = m.mode || D.store.business_mode;
+  const st = STATUS[o.status] || STATUS.new;
+  const items = Array.isArray(o.items) ? o.items : [];
+  const setStatus = async (next, confirmMsg) => {
+    if (confirmMsg && !(await confirmDialog(confirmMsg, { okText: "تأكيد", danger: next === "cancelled" }))) return;
+    try {
+      await save("merchant_set_order_status", { p_event_id: o.id, p_status: next }, `تم تحويل الطلب إلى «${STATUS[next].label}»`);
+      reload();
+    } catch { /* handled */ }
+  };
+  const phone = m.phone ? normalizePhone(m.phone) : "";
+  const greet = `مرحباً ${m.name || ""}، بخصوص طلبك #${ORDER_PREFIX[mode] || "ORD"}-${o.order_no} من ${D.store.name}`;
+  const actions = {
+    new: [["✅ تأكيد الطلب", "confirmed", "btn-primary"], ["إلغاء", "cancelled", "btn-danger", "إلغاء هذا الطلب؟ سيتم إرجاع الكميات للمخزون."]],
+    confirmed: [["✔️ تم التسليم", "done", "btn-primary"], ["إلغاء", "cancelled", "btn-danger", "إلغاء هذا الطلب؟ سيتم إرجاع الكميات للمخزون."]],
+    done: [["↩️ إعادة فتح", "confirmed", ""]],
+    cancelled: [["↩️ إعادة فتح", "new", ""]],
+  }[o.status] || [];
+
+  return h("article", { class: `ocard st-${o.status}` },
+    h("div", { class: "o-head" },
+      h("b", { class: "ltr", text: `#${ORDER_PREFIX[mode] || "ORD"}-${o.order_no ?? "—"}` }),
+      h("span", { class: `badge ${st.cls}` }, st.label),
+      h("span", { class: "hint grow", style: { "text-align": "end" }, text: timeAgo(o.created_at) })),
+    h("div", { class: "o-lines" },
+      m.name ? h("div", {}, "👤 ", h("b", { text: m.name })) : null,
+      m.phone ? h("div", {}, "📞 ", h("span", { class: "ltr", text: m.phone })) : null,
+      m.type ? h("div", { text: `${m.type === "delivery" ? "🛵 توصيل" : "🏃 استلام"}${m.district ? ` — ${m.district}` : ""}${m.address ? `، ${m.address}` : ""}` }) : null,
+      m.gps ? h("div", {}, "🗺️ ", h("a", { href: m.gps, target: "_blank", rel: "noopener" }, "الموقع على الخريطة")) : null,
+      m.date ? h("div", { text: `📅 ${m.date}` }) : null,
+      m.kind ? h("div", { text: `📋 ${m.kind}` }) : null,
+      m.pay ? h("div", { text: `💳 ${m.pay}` }) : null,
+      m.note ? h("div", { class: "o-note", text: `📝 ${m.note}` }) : null),
+    items.length ? h("div", { class: "o-items" }, items.map((i) => h("div", { class: "row between" },
+      h("span", { text: `${i.n}${i.s ? ` (${i.s})` : ""} ×${i.q ?? 1}` }), h("span", { text: money(i.t ?? 0) })))) : null,
+    h("div", { class: "o-total row between" },
+      h("span", {}, m.coupon ? `🎟️ ${m.coupon} (-${money(m.discount || 0)})` : "الإجمالي"),
+      h("b", { text: money(o.total ?? 0) })),
+    h("div", { class: "o-actions" },
+      actions.map(([label, next, cls, confirmMsg]) => h("button", { class: `btn btn-sm ${cls}`, type: "button", onClick: () => setStatus(next, confirmMsg) }, label)),
+      phone ? h("a", { class: "btn btn-sm btn-outline", href: `https://wa.me/${phone}?text=${encodeURIComponent(greet)}`, target: "_blank", rel: "noopener" }, "💬 راسل العميل") : null));
+}
+
+/* ---------------- الإحصائيات ---------------- */
+async function openInsights() {
+  const body = h("div", { class: "stack" }, h("div", { class: "center" }, h("span", { class: "spinner" })));
+  openSheet({ title: "📊 إحصائيات آخر 14 يوم", body });
+  let r;
+  try { r = await rpc(sb, "merchant_stats_detail", { p_token: token, p_days: 14 }); }
+  catch (e) { return fill(body, h("div", { class: "alert alert-danger" }, friendlyError(e))); }
+  const daily = r.daily || [];
+  const tot = daily.reduce((a, d) => ({ v: a.v + d.views, o: a.o + d.orders, r: a.r + Number(d.revenue) }), { v: 0, o: 0, r: 0 });
+  const maxO = Math.max(1, ...daily.map((d) => d.orders));
+  const maxH = Math.max(1, ...(r.hours || [0]));
+  const top = r.top_items || [];
+  const maxT = Math.max(1, ...top.map((x) => Number(x.qty)));
+  const peak = (r.hours || []).indexOf(Math.max(...(r.hours || [0])));
+
+  fill(body,
+    h("div", { class: "mini-stats" },
+      h("div", {}, h("b", { text: String(tot.o) }), h("span", {}, "طلب")),
+      h("div", {}, h("b", { text: money(tot.r) }), h("span", {}, "قيمة الطلبات")),
+      h("div", {}, h("b", { text: tot.v ? `${Math.round((tot.o / tot.v) * 100)}%` : "—" }), h("span", {}, "نسبة التحويل"))),
+    h("div", { class: "card stack" }, h("b", {}, "الطلبات اليومية"),
+      h("div", { class: "chart-bars", role: "img", "aria-label": "رسم بياني للطلبات اليومية" }, daily.map((d) =>
+        h("div", { class: "bar-col", title: `${d.d}: ${d.orders} طلب • ${money(d.revenue)}` },
+          h("span", { class: "bar-v", text: d.orders ? String(d.orders) : "" }),
+          h("i", { class: "bar", style: { height: `${Math.max(3, (d.orders / maxO) * 100)}%` } }),
+          h("span", { class: "bar-l", text: d.d.slice(8) }))))),
+    h("div", { class: "card stack" }, h("b", {}, "الأكثر طلباً"),
+      top.length ? top.map((x) => h("div", { class: "hbar" },
+        h("div", { class: "row between small" }, h("span", { text: x.name }), h("span", { class: "muted", text: `${x.qty} • ${money(x.revenue)}` })),
+        h("div", { class: "hbar-track" }, h("i", { style: { width: `${(Number(x.qty) / maxT) * 100}%` } }))))
+        : h("span", { class: "muted small" }, "لا توجد بيانات بعد")),
+    h("div", { class: "card stack" }, h("b", {}, "أوقات الذروة", tot.o ? h("span", { class: "hint", text: `  • الأكثر الساعة ${fmtTime12(`${String(peak).padStart(2, "0")}:00`)}` }) : null),
+      h("div", { class: "chart-bars hours", role: "img", "aria-label": "توزيع الطلبات حسب الساعة" }, (r.hours || []).map((c, hr) =>
+        h("div", { class: "bar-col", title: `${hr}:00 — ${c} طلب` },
+          h("i", { class: "bar", style: { height: `${Math.max(3, (c / maxH) * 100)}%` } }),
+          h("span", { class: "bar-l", text: hr % 3 === 0 ? String(hr) : "" }))))));
+}
+
+/* ---------------- الكوبونات ---------------- */
+function couponsCard() {
+  const list = h("div", { class: "stack" });
+  const card = h("div", { class: "card stack" },
+    h("div", { class: "row between" }, h("h2", { class: "card-title", style: { margin: "0" } }, "🎟️ كوبونات الخصم"),
+      h("button", { class: "btn btn-soft btn-sm", type: "button", onClick: () => couponForm(null, draw) }, "+ كوبون")),
+    h("p", { class: "hint", style: { margin: "0" }, text: "يكتب العميل الكود في صفحة الطلب ويُخصم تلقائياً من الإجمالي." }), list);
+  async function draw() {
+    let rows = [];
+    try { rows = await rpc(sb, "merchant_list_coupons", { p_token: token }); } catch (e) { return fill(list, h("div", { class: "error-text" }, friendlyError(e))); }
+    if (!rows.length) return fill(list, h("div", { class: "muted small" }, "لا توجد كوبونات بعد"));
+    fill(list, ...rows.map((c) => {
+      const expired = c.expires_at && new Date(c.expires_at) < new Date();
+      const used = c.max_uses ? `${c.used}/${c.max_uses}` : `${c.used}`;
+      return h("div", { class: "coupon-row" },
+        h("div", { class: "grow" },
+          h("b", { class: "ltr code", text: c.code }),
+          h("div", { class: "hint", text: `${c.kind === "percent" ? `${num(c.value)}%` : money(c.value)}${num(c.min_order) ? ` • للطلبات فوق ${money(c.min_order)}` : ""} • استُخدم ${used}${c.expires_at ? ` • ينتهي ${new Date(c.expires_at).toLocaleDateString("ar-u-ca-gregory-nu-latn")}` : ""}` })),
+        expired ? h("span", { class: "badge badge-danger" }, "منتهي") : !c.active ? h("span", { class: "badge badge-muted" }, "موقوف") : h("span", { class: "badge badge-success" }, "فعّال"),
+        h("button", { class: "rbtn", type: "button", "aria-label": "تعديل", onClick: () => couponForm(c, draw) }, "✏️"),
+        h("button", { class: "rbtn danger", type: "button", "aria-label": "حذف", onClick: async () => {
+          if (!(await confirmDialog(`حذف الكوبون ${c.code}؟`, { okText: "حذف", danger: true }))) return;
+          try { await save("merchant_delete_coupon", { p_id: c.id }, "تم حذف الكوبون"); draw(); } catch { /* handled */ }
+        } }, "🗑️"));
+    }));
+  }
+  draw();
+  return card;
+}
+
+function couponForm(c, done) {
+  const code = input({ value: c?.code || "", maxlength: "20", dir: "ltr", placeholder: "SAVE10", style: { "text-transform": "uppercase" } });
+  let kind = c?.kind || "percent";
+  const value = input({ type: "number", inputmode: "decimal", min: "1", step: "0.5", value: c ? String(num(c.value)) : "" });
+  const minO = input({ type: "number", inputmode: "decimal", min: "0", step: "1", value: c ? String(num(c.min_order)) : "0" });
+  const maxU = input({ type: "number", inputmode: "numeric", min: "1", value: c?.max_uses ? String(c.max_uses) : "", placeholder: "غير محدود" });
+  const exp = input({ type: "date", value: c?.expires_at ? c.expires_at.slice(0, 10) : "" });
+  const active = switchEl(c ? c.active : true, null, "فعّال");
+  const valLbl = h("span", { text: kind === "percent" ? "نسبة الخصم %" : `مبلغ الخصم (${CONFIG.CURRENCY})` });
+  const seg = h("div", { class: "segmented" }, [["percent", "نسبة %"], ["fixed", "مبلغ ثابت"]].map(([k, l]) =>
+    h("label", {}, h("input", { type: "radio", name: "ckind", checked: kind === k, onChange: () => { kind = k; valLbl.textContent = k === "percent" ? "نسبة الخصم %" : `مبلغ الخصم (${CONFIG.CURRENCY})`; } }), h("span", {}, l))));
+  const btn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, c ? "حفظ الكوبون" : "إنشاء الكوبون");
+  const sheet = openSheet({ title: c ? `تعديل ${c.code}` : "كوبون جديد", foot: btn, body: [
+    field("الكود", code, "حروف إنجليزية وأرقام، 3 إلى 20 حرفاً"),
+    h("div", { class: "field" }, h("span", { class: "label" }, "نوع الخصم"), seg),
+    h("label", { class: "field" }, valLbl, value),
+    field(`الحد الأدنى للطلب (${CONFIG.CURRENCY})`, minO),
+    h("div", { class: "row" }, h("div", { class: "grow" }, field("عدد مرات الاستخدام", maxU)), h("div", { class: "grow" }, field("تاريخ الانتهاء", exp))),
+    h("div", { class: "row between" }, h("b", {}, "فعّال"), active.el),
+  ] });
+  btn.addEventListener("click", async () => {
+    const v = num(value.value);
+    if (!/^[A-Za-z0-9_-]{3,20}$/.test(code.value.trim())) return toast("الكود من 3 إلى 20 حرفاً إنجليزياً أو رقماً", "error");
+    if (!(v > 0) || (kind === "percent" && v > 90)) return toast(kind === "percent" ? "النسبة من 1 إلى 90" : "اكتب مبلغ الخصم", "error");
+    btn.disabled = true;
+    try {
+      await save("merchant_save_coupon", { p: { id: c?.id || null, code: code.value.trim(), kind, value: String(v), min_order: String(num(minO.value)),
+        max_uses: maxU.value ? String(Math.floor(num(maxU.value))) : null, expires_at: exp.value ? new Date(`${exp.value}T23:59:59`).toISOString() : "", active: active.input.checked } },
+        "تم حفظ الكوبون ✅");
+      sheet.close(); done();
+    } catch { btn.disabled = false; }
+  });
+}
+
+/* ---------------- أوقات العمل (موحّدة / لكل يوم بفترتين) ---------------- */
+function hoursEditor(s) {
+  let mode = s.hours_json ? "perday" : s.open_time ? "same" : "all";
+  const openT = input({ type: "time", value: s.open_time || "16:00", "aria-label": "يفتح" });
+  const closeT = input({ type: "time", value: s.close_time || "02:00", "aria-label": "يغلق" });
+  const sameBox = h("div", { class: "row" }, h("div", { class: "grow" }, field("يفتح", openT)), h("div", { class: "grow" }, field("يغلق", closeT)));
+  const hint = h("div", { class: "hint" });
+  const updHint = () => {
+    hint.textContent = mode === "same" && openT.value && closeT.value && closeT.value <= openT.value
+      ? `دوام ممتد لما بعد منتصف الليل: من ${fmtTime12(openT.value)} حتى ${fmtTime12(closeT.value)} اليوم التالي` : "";
+  };
+  openT.addEventListener("input", updHint); closeT.addEventListener("input", updHint);
+
+  const days = [0, 1, 2, 3, 4, 5, 6].map((d) => {
+    const sh = s.hours_json?.[d] || (s.hours_json ? [] : [{ o: s.open_time || "09:00", c: s.close_time || "23:00" }]);
+    const on = switchEl(!!sh.length || !s.hours_json, () => draw(), `${WD[d]} مفتوح`);
+    const o1 = input({ type: "time", value: sh[0]?.o || "09:00", "aria-label": `${WD[d]} يفتح` });
+    const c1 = input({ type: "time", value: sh[0]?.c || "23:00", "aria-label": `${WD[d]} يغلق` });
+    const o2 = input({ type: "time", value: sh[1]?.o || "16:00", "aria-label": `${WD[d]} الفترة الثانية تفتح` });
+    const c2 = input({ type: "time", value: sh[1]?.c || "23:00", "aria-label": `${WD[d]} الفترة الثانية تغلق` });
+    let two = sh.length > 1;
+    const twoBtn = h("button", { class: "link-btn", type: "button" });
+    const row2 = h("div", { class: "shift" }, o2, h("span", {}, "←"), c2);
+    const row1 = h("div", { class: "shift" }, o1, h("span", {}, "←"), c1);
+    const el = h("div", { class: "day-row" }, h("div", { class: "row between" }, h("b", { text: WD[d] }), on.el), row1, row2, twoBtn);
+    function draw() {
+      const open = on.input.checked;
+      row1.hidden = !open; row2.hidden = !open || !two; twoBtn.hidden = !open;
+      twoBtn.textContent = two ? "− حذف الفترة الثانية" : "+ فترة ثانية";
+      el.classList.toggle("off", !open);
+    }
+    twoBtn.addEventListener("click", () => { two = !two; draw(); });
+    draw();
+    return { el, get: () => (on.input.checked ? [{ o: o1.value, c: c1.value }, ...(two ? [{ o: o2.value, c: c2.value }] : [])].filter((x) => x.o && x.c) : []) };
+  });
+  const perBox = h("div", { class: "stack", style: { gap: "8px" } }, days.map((d) => d.el));
+
+  const seg = h("div", { class: "segmented" }, [["all", "24 ساعة"], ["same", "نفس الوقت يومياً"], ["perday", "حسب اليوم"]].map(([k, l]) =>
+    h("label", {}, h("input", { type: "radio", name: "hmode", value: k, checked: mode === k, onChange: () => { mode = k; sync(); } }), h("span", {}, l))));
+  function sync() { sameBox.hidden = mode !== "same"; perBox.hidden = mode !== "perday"; updHint(); }
+  sync();
+
+  return {
+    el: h("div", { class: "card stack" }, h("h2", { class: "card-title" }, "🕒 أوقات العمل"), seg, sameBox, hint, perBox,
+      h("div", { class: "hint", text: "يدعم الدوام لما بعد منتصف الليل (مثل 4:00م ← 2:00ص) وفترتين في اليوم." })),
+    get() {
+      if (mode === "all") return { open_time: "", close_time: "", hours_json: null };
+      if (mode === "same") {
+        if (!openT.value || !closeT.value) throw new Error("حدد وقت الفتح والإغلاق");
+        return { open_time: openT.value, close_time: closeT.value, hours_json: null };
+      }
+      const hj = {};
+      days.forEach((d, i) => { const v = d.get(); if (v.length) hj[i] = v; });
+      return { open_time: "", close_time: "", hours_json: hj };
+    },
+  };
+}
+
+/* ---------------- أيام الحجز المحجوزة (للتاجر) ---------------- */
+function blockedDatesField(dates) {
+  const set = new Set(dates || []);
+  const today = new Date().toISOString().slice(0, 10);
+  let [y, m] = today.split("-").map(Number); m -= 1;
+  const box = h("div", { class: "cal" });
+  const count = h("span", { class: "hint" });
+  const draw = () => {
+    const first = new Date(Date.UTC(y, m, 1)).getUTCDay();
+    const n = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const cells = [];
+    for (let i = 0; i < first; i++) cells.push(h("span"));
+    for (let d = 1; d <= n; d++) {
+      const ymd = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const b = h("button", { type: "button", class: `cal-day${set.has(ymd) ? " busy" : ""}`, disabled: ymd < today, "aria-pressed": set.has(ymd) ? "true" : "false" }, String(d));
+      b.addEventListener("click", () => { set.has(ymd) ? set.delete(ymd) : set.add(ymd); draw(); });
+      cells.push(b);
+    }
+    count.textContent = set.size ? `${[...set].filter((d) => d >= today).length} يوم محجوز قادم` : "لا توجد أيام محجوزة";
+    fill(box,
+      h("div", { class: "cal-head" },
+        h("button", { type: "button", class: "rbtn", "aria-label": "الشهر السابق", onClick: () => { m -= 1; if (m < 0) { m = 11; y -= 1; } draw(); } }, "›"),
+        h("b", { text: new Date(Date.UTC(y, m, 1)).toLocaleDateString("ar-u-ca-gregory-nu-latn", { month: "long", year: "numeric", timeZone: "UTC" }) }),
+        h("button", { type: "button", class: "rbtn", "aria-label": "الشهر التالي", onClick: () => { m += 1; if (m > 11) { m = 0; y += 1; } draw(); } }, "‹")),
+      h("div", { class: "cal-grid cal-wd" }, WD.map((w) => h("span", { text: w.slice(0, 2) }))),
+      h("div", { class: "cal-grid" }, cells));
+  };
+  draw();
+  return {
+    el: h("div", { class: "field" }, h("span", { class: "label" }, "📅 الأيام المحجوزة (اضغط على اليوم لحجزه أو فكّه)"), box, count),
+    get: () => [...set].filter((d) => d >= today).sort(),
+  };
+}
+
+/* ---------------- ترتيب الأصناف ---------------- */
+async function moveProduct(p, dir) {
+  const ordered = [...D.products].sort((a, b) => a.sort_order - b.sort_order);
+  const cats = [...new Set(ordered.map((x) => x.category || ""))];
+  const groups = cats.map((c) => ordered.filter((x) => (x.category || "") === c));
+  const gi = cats.indexOf(p.category || "");
+  const g = groups[gi];
+  const i = g.indexOf(p);
+  const j = i + dir;
+  if (j < 0 || j >= g.length) return;
+  [g[i], g[j]] = [g[j], g[i]];
+  await saveOrder(groups.flat());
+}
+async function moveCategory(cat, dir) {
+  const ordered = [...D.products].sort((a, b) => a.sort_order - b.sort_order);
+  const cats = [...new Set(ordered.map((x) => x.category || ""))];
+  const i = cats.indexOf(cat), j = i + dir;
+  if (i < 0 || j < 0 || j >= cats.length) return;
+  [cats[i], cats[j]] = [cats[j], cats[i]];
+  await saveOrder(cats.flatMap((c) => ordered.filter((x) => (x.category || "") === c)));
+}
+async function saveOrder(list) {
+  list.forEach((x, k) => { x.sort_order = k + 1; });
+  try {
+    await rpc(sb, "merchant_reorder_products", { p_token: token, p_ids: list.map((x) => x.id) });
+    renderShell();
+  } catch (e) { toast(friendlyError(e), "error"); loadDash(); }
 }
