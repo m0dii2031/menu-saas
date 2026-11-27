@@ -318,3 +318,42 @@ body.sf-body { background: var(--card); }
   unicode-bidi: plaintext; text-align: start;
 }
 .money, .item-price, .p-price, .pr, .fcard .p { white-space: nowrap; }
+
+/* =========================================================
+   الإصدار 2: أوقات العمل، السعر قبل الخصم، المخزون، الخصم، التقويم
+   ========================================================= */
+.info-btn { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 10px 6px; display: grid; gap: 2px; text-align: center; }
+.sf-info > .info-btn + div, .sf-info > div + .info-btn { border-inline-start: 1px solid var(--border); }
+.hours-list { display: grid; gap: 2px; }
+.hours-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 12px; }
+.hours-row span { color: var(--muted); text-align: end; }
+.hours-row.today { background: var(--primary-soft); }
+.hours-row.today span { color: var(--text); font-weight: 700; }
+
+.old-price { color: var(--muted); font-weight: 500; font-size: .85em; text-decoration-thickness: 1.5px; }
+.low-stock { font-size: 12px; font-weight: 700; color: #c2410c; }
+.theme-cafe .low-stock { color: #fdba74; }
+.sale-badge { position: absolute; top: 6px; inset-inline-start: 6px; background: #e11d48; color: #fff; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 8px; direction: ltr; }
+.min-warn { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #fff4e5; color: #8a4b00; font-size: 13px; font-weight: 700; }
+.theme-cafe .min-warn { background: #3a2410; color: #ffd8a8; }
+
+.cal { border: 1px solid var(--border); border-radius: 16px; padding: 10px; display: grid; gap: 6px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; }
+.cal-head b { font-size: 15px; }
+.cal-head .rbtn { background: var(--bg); color: var(--text); width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; font-size: 18px; }
+.cal-head .rbtn:disabled { opacity: .35; cursor: default; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-wd span { font-size: 11px; color: var(--muted); text-align: center; font-weight: 700; }
+.cal-day { height: 38px; border: 0; border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; font-variant-numeric: tabular-nums; }
+.cal-day:disabled { opacity: .35; cursor: default; }
+.cal-day.busy { opacity: 1; background: #fee2e2; color: #b91c1c; text-decoration: line-through; }
+.theme-cafe .cal-day.busy { background: #3b1414; color: #fca5a5; }
+.cal-day.sel { background: var(--primary); color: var(--on-primary); }
+.cal-day.clash { background: #b91c1c; color: #fff; }
+.cal-day:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.cal-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.cal-legend span { display: inline-flex; gap: 6px; align-items: center; }
+.cal-legend .lg { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+.cal-legend .lg.sel { background: var(--primary); }
+.cal-legend .lg.busy { background: #fecaca; }
+.sel-date { color: var(--primary); font-weight: 800; }

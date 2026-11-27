@@ -5,7 +5,7 @@
 import { CONFIG } from "./config.js";
 import {
   h, fill, $, toast, openSheet, copyText, money, moneyText, fmtDateMsg, t, initLang, setLang, isEn, num, oneLine, multiLine, isValidPhone, waLink,
-  initials, store as ls, applyTheme, openState, fmtTime12, fmtDateAr, tzParts, addDays, MODES,
+  initials, store as ls, applyTheme, openState, weekSchedule, tzWeekday, dayName, fmtTime12, fmtDateAr, tzParts, addDays, MODES,
   createSb, rpc, withTimeout, debounce, getStoreSlug, toLatinDigits,
 } from "./common.js";
 import { EN } from "./i18n.js";
@@ -199,6 +199,52 @@ async function shareStore() {
   copyText(url, t("تم نسخ رابط المتجر ✅"));
 }
 
+/* ---------------- أوقات العمل ---------------- */
+function closedText(st) {
+  if (st.manual) return t("مغلق الآن مؤقتاً");
+  if (st.closedAll || !st.opensAt) return t("المتجر مغلق حالياً");
+  const time = fmtTime12(st.opensAt);
+  if (st.opensDay === "tomorrow") return t("مغلق الآن — يفتح بكرة الساعة {t}", { t: time });
+  if (typeof st.opensDay === "number") return t("مغلق الآن — يفتح يوم {d} الساعة {t}", { d: dayName(st.opensDay), t: time });
+  return t("مغلق الآن — يفتح الساعة {t}", { t: time });
+}
+
+function todayHoursText(s) {
+  const week = weekSchedule(s);
+  if (!week) return t("24 ساعة");
+  const sh = week[tzWeekday(s.timezone, now())];
+  if (!sh.length) return t("مغلق اليوم");
+  return `${fmtTime12(sh[0].o)} - ${fmtTime12(sh[0].c)}${sh.length > 1 ? " +" : ""}`;
+}
+
+function openHoursSheet() {
+  const s = S.store;
+  const week = weekSchedule(s);
+  const today = tzWeekday(s.timezone, now());
+  openSheet({
+    title: t("أوقات العمل"),
+    body: week ? h("div", { class: "hours-list" }, [0, 1, 2, 3, 4, 5, 6].map((d) => h("div", { class: `hours-row${d === today ? " today" : ""}` },
+      h("b", { text: dayName(d) }),
+      h("span", { text: week[d].length ? week[d].map((x) => `${fmtTime12(x.o)} - ${fmtTime12(x.c)}`).join(isEn() ? " , " : " ، ") : t("مغلق") }))))
+      : h("p", { class: "center", style: { margin: "0" }, text: t("مفتوح 24 ساعة طوال الأسبوع") }),
+  });
+}
+
+/* ---------------- السعر قبل الخصم والمخزون ---------------- */
+function oldPrice(p) {
+  const o = num(p.options_json?.old_price);
+  return o > startingPrice(p) ? o : 0;
+}
+function priceNodes(p, amount) {
+  const o = oldPrice(p);
+  return [money(amount), o ? h("s", { class: "old-price", text: money(o) }) : null];
+}
+/** الكمية المتبقية القابلة للإضافة (Infinity إذا غير محدود) */
+function stockLeft(p, exceptQty = 0) {
+  if (p.stock == null) return Infinity;
+  return Math.max(0, num(p.stock) - (qtyInCart(p.id) - exceptQty));
+}
+
 function render() {
   cleanup();
   const s = S.store;
@@ -221,8 +267,8 @@ function render() {
   const info = [];
   info.push(h("div", {}, h("span", { class: "k" }, t("الحالة")),
     h("span", { class: "v" }, h("i", { class: `dot ${st.open ? "on" : "off"}` }), st.open ? t("مفتوح") : t("مغلق"))));
-  info.push(h("div", {}, h("span", { class: "k" }, t("أوقات العمل")),
-    h("span", { class: "v", text: s.open_time && s.close_time && s.open_time !== s.close_time ? `${fmtTime12(s.open_time)} - ${fmtTime12(s.close_time)}` : t("24 ساعة") })));
+  info.push(h("button", { type: "button", class: "info-btn", onClick: openHoursSheet, "aria-label": t("أوقات العمل") }, h("span", { class: "k" }, t("أوقات العمل") + " ›"),
+    h("span", { class: "v", text: todayHoursText(s) })));
   if (mode === "order") {
     info.push(h("div", {}, h("span", { class: "k" }, t("التوصيل")), h("span", { class: "v", text: num(s.delivery_fee) > 0 ? money(s.delivery_fee) : t("مجاني") })));
   } else {
@@ -242,7 +288,7 @@ function render() {
     page.append(h("div", { class: "sf-closed", role: "alert" },
       h("span", { class: "ico", "aria-hidden": "true" }, "🌙"),
       h("div", {},
-        h("div", { text: st.manual ? t("مغلق الآن مؤقتاً") : t("مغلق الآن — يفتح الساعة {t}", { t: fmtTime12(st.opensAt) }) }),
+        h("div", { text: closedText(st) }),
         h("div", { class: "small", style: { "font-weight": "500" }, text: t("تقدر تتصفح، وبيتاح الطلب أول ما نفتح.") }))));
   }
 
@@ -484,7 +530,7 @@ function featuredCard(p) {
     h("div", { class: "media" }, h("img", { src: productImages(p)[0], alt: "", loading: "lazy" }),
       h("span", { class: `add-btn${q ? " has-qty" : ""}`, dataset: { pid: p.id }, style: { bottom: "8px", "inset-inline-end": "8px" } }, q ? String(q) : "+")),
     h("b", { text: p.name }),
-    h("div", { class: "p" }, money(startingPrice(p))));
+    h("div", { class: "p" }, priceNodes(p, startingPrice(p))));
 }
 
 function productCard(p) {
@@ -513,7 +559,8 @@ function productCard(p) {
   let price = null;
   if (mode === "order") {
     const hasSizes = (p.options_json?.sizes || []).length > 0;
-    price = h("div", { class: "item-price" }, hasSizes ? h("span", { class: "from" }, t("يبدأ من")) : null, money(startingPrice(p)));
+    price = h("div", { class: "item-price" }, hasSizes ? h("span", { class: "from" }, t("يبدأ من")) : null, priceNodes(p, startingPrice(p)),
+      p.stock != null && p.stock <= 5 ? h("span", { class: "low-stock", text: t("باقي {n} فقط", { n: p.stock }) }) : null);
   } else if (num(p.price) > 0) {
     price = h("div", { class: "item-price" }, h("span", { class: "from" }, mode === "charity" ? t("قيمة السهم") : t("رسوم الاستشارة")), money(p.price));
   }
@@ -530,6 +577,7 @@ function productCard(p) {
       off ? h("span", { class: "soldout" }, t("غير متوفر حالياً")) : price),
     h("div", { class: "item-media" },
       imgs[0] ? h("img", { src: imgs[0], alt: "", loading: "lazy", width: "112", height: "112" }) : h("div", { class: "ph", "aria-hidden": "true" }, MODE_ICON[mode]),
+      mode === "order" && oldPrice(p) ? h("span", { class: "sale-badge", text: `-${Math.round((1 - startingPrice(p) / oldPrice(p)) * 100)}%` }) : null,
       action));
   if (!off) card.addEventListener("click", () => openItem(p));
   return card;
@@ -596,8 +644,14 @@ function sanitizeCart(lines, notify = false) {
       if (!size) { dropped++; continue; }
     }
     const ad = (l.addons || []).map((a) => addons.find((x) => x.name === a.name)).filter(Boolean);
+    let qty = Math.min(99, Math.max(1, Math.floor(num(l.qty)) || 1));
+    if (p.stock != null) {
+      const used = out.filter((x) => x.pid === p.id).reduce((a, x) => a + x.qty, 0);
+      qty = Math.min(qty, p.stock - used);
+      if (qty <= 0) { dropped++; continue; }
+    }
     out.push({ pid: p.id, name: p.name, img: p.image_url || null, base: num(p.price), size, addons: ad,
-      note: oneLine(l.note, 120), qty: Math.min(99, Math.max(1, Math.floor(num(l.qty)) || 1)) });
+      note: oneLine(l.note, 120), qty });
   }
   if (notify && dropped) toast(t("تم تحديث السلة: بعض الأصناف لم تعد متوفرة"));
   return out;
@@ -612,10 +666,14 @@ function addToCart(line) {
   refreshCta();
 }
 
-function stepper(value, onChange, small = false, min = 1) {
+function stepper(value, onChange, small = false, min = 1, max = 99) {
   const out = h("output", { text: String(value) });
   let v = value;
-  const set = (n) => { v = Math.min(99, Math.max(min, n)); out.textContent = String(v); onChange(v); };
+  const set = (n) => {
+    const lim = Math.min(99, typeof max === "function" ? max() : max);
+    if (n > lim) { toast(t("هذي كل الكمية المتوفرة"), ""); n = lim; }
+    v = Math.max(min, n); out.textContent = String(v); onChange(v);
+  };
   return h("div", { class: `stepper qty${small ? " sm" : ""}` },
     h("button", { type: "button", "aria-label": t("زيادة"), onClick: () => set(v + 1) }, "+"),
     out,
@@ -651,7 +709,8 @@ function openProduct(p) {
     h("div", { class: "stack", style: { gap: "6px" } },
       h("h2", { class: "p-title", text: p.name }),
       p.description ? h("p", { class: "p-desc", text: p.description }) : null,
-      h("div", { class: "p-price" }, sizes.length ? h("span", { class: "muted small", style: { "font-weight": "500" } }, t("يبدأ من ")) : null, money(startingPrice(p)))),
+      h("div", { class: "p-price" }, sizes.length ? h("span", { class: "muted small", style: { "font-weight": "500" } }, t("يبدأ من ")) : null, priceNodes(p, startingPrice(p))),
+      p.stock != null ? h("div", { class: "low-stock", text: t("المتوفر: {n}", { n: p.stock }) }) : null),
   ];
 
   let sizeGroup = null;
@@ -675,7 +734,8 @@ function openProduct(p) {
   }
   body.push(optGroup(t("ملاحظات خاصة"), h("span", { class: "opt-tag" }, t("اختياري")), null, h("div", { style: { padding: "4px 16px 4px" } }, note)));
 
-  const foot = h("div", { class: "p-foot" }, stepper(1, (v) => { state.qty = v; updateBtn(); }), addBtn);
+  const maxQty = () => stockLeft(p);
+  const foot = h("div", { class: "p-foot" }, stepper(1, (v) => { state.qty = v; updateBtn(); }, false, 1, maxQty), addBtn);
   const sheet = openSheet({ title: p.name, body, foot, className: "hero-sheet" });
   updateBtn();
   addBtn.addEventListener("click", () => {
@@ -685,6 +745,7 @@ function openProduct(p) {
       sizeGroup.classList.remove("shake"); void sizeGroup.offsetWidth; sizeGroup.classList.add("shake");
       return;
     }
+    if (state.qty > stockLeft(p)) { toast(stockLeft(p) ? t("هذي كل الكمية المتوفرة") : t("الكمية المتوفرة موجودة في سلتك"), "error"); return; }
     addToCart({ pid: p.id, name: p.name, img: p.image_url || null, base: num(p.price), size: state.size,
                 addons: [...state.addons].sort().map((i) => addons[i]), note: oneLine(note.value, 120), qty: state.qty });
     sheet.close();
@@ -740,7 +801,22 @@ function bill(rows) {
 function openCheckout() {
   const s = S.store;
   const c = customer();
-  const st = { type: c.order_type === "pickup" ? "pickup" : "delivery", pay: c.pay || "cash", gps: null };
+  const st = { type: c.order_type === "pickup" ? "pickup" : "delivery", pay: c.pay || "cash", gps: null, coupon: null };
+  const zones = Array.isArray(s.delivery_zones) ? s.delivery_zones : [];
+  const zoneSel = zones.length ? h("select", { class: "select", "aria-label": t("الحي") },
+    h("option", { value: "" }, t("اختر الحي")),
+    zones.map((z, i) => h("option", { value: String(i), selected: z.name === c.district }, `${z.name} — ${num(z.fee) ? money(z.fee) : t("مجاني")}`))) : null;
+  const deliveryFee = () => {
+    if (st.type !== "delivery") return 0;
+    if (zones.length) { const z = zones[Number(zoneSel.value)]; return zoneSel.value === "" || !z ? 0 : num(z.fee); }
+    return num(s.delivery_fee);
+  };
+  const minOrder = num(s.min_order);
+  const discountOf = (sub) => {
+    const cp = st.coupon;
+    if (!cp || sub < num(cp.min_order)) return 0;
+    return cp.kind === "percent" ? Math.round(sub * num(cp.value)) / 100 : Math.min(num(cp.value), sub);
+  };
 
   const linesBox = h("div", { class: "stack", style: { gap: "12px" } });
   const billBox = h("div");
@@ -769,7 +845,9 @@ function openCheckout() {
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   });
 
-  const deliverySec = sec(t("عنوان التوصيل"), gpsBtn, district.el, address.el);
+  if (zoneSel) zoneSel.addEventListener("change", () => renderBill());
+  const deliverySec = sec(t("عنوان التوصيل"), gpsBtn,
+    zoneSel ? h("label", { class: "field" }, h("span", { text: t("الحي") }), zoneSel) : district.el, address.el);
   deliverySec.hidden = st.type !== "delivery";
 
   const ibanBox = s.iban_number ? h("div", { class: "iban-box", hidden: st.pay !== "transfer" },
@@ -784,7 +862,7 @@ function openCheckout() {
     h("input", { type: "radio", name: "pay", checked: st.pay === p.v, onChange: () => { st.pay = p.v; if (ibanBox) ibanBox.hidden = p.v !== "transfer"; } })))), ibanBox);
 
   const typeSec = sec(t("طريقة الاستلام"), choices("otype", [
-    { value: "delivery", icon: "🛵", label: t("توصيل"), sub: num(s.delivery_fee) ? money(s.delivery_fee) : t("مجاني") },
+    { value: "delivery", icon: "🛵", label: t("توصيل"), sub: zones.length ? t("حسب الحي") : num(s.delivery_fee) ? money(s.delivery_fee) : t("مجاني") },
     { value: "pickup", icon: "🏃", label: t("استلام من المحل"), sub: t("بدون رسوم") },
   ], st.type, (v) => { st.type = v; deliverySec.hidden = v !== "delivery"; renderBill(); }));
 
@@ -804,16 +882,46 @@ function openCheckout() {
           renderLines(); renderBill(); return;
         }
         l.qty = v; saveCart(); refreshCta(); renderBill(); renderLines();
-      }, true, 0))));
+      }, true, 0, () => { const p = S.products.find((x) => x.id === l.pid); return p ? Math.min(99, stockLeft(p, l.qty)) : 99; }))));
   }
   function renderBill() {
     const sub = cartSubtotal();
-    const fee = st.type === "delivery" ? num(s.delivery_fee) : 0;
+    const fee = deliveryFee();
+    const disc = discountOf(sub);
     fill(billBox, bill([
       [t("مجموع الأصناف"), money(sub)],
-      st.type === "delivery" ? [t("رسوم التوصيل"), fee ? money(fee) : t("مجاناً")] : null,
-      [t("الإجمالي"), money(sub + fee), true],
-    ]));
+      disc ? [t("الخصم ({c})", { c: st.coupon.code }), `-${money(disc)}`] : null,
+      st.type === "delivery" ? [t("رسوم التوصيل"), zones.length && zoneSel.value === "" ? t("اختر الحي") : fee ? money(fee) : t("مجاناً")] : null,
+      [t("الإجمالي"), money(Math.max(0, sub - disc) + fee), true],
+    ]), st.type === "delivery" && minOrder && sub < minOrder
+      ? h("div", { class: "min-warn", role: "status", text: t("الحد الأدنى لطلبات التوصيل {m} — أضف {r} للمتابعة", { m: money(minOrder), r: money(minOrder - sub) }) }) : null,
+      st.coupon && sub < num(st.coupon.min_order) ? h("div", { class: "min-warn", text: t("الكود يتطلب طلباً بقيمة {m} أو أكثر", { m: money(st.coupon.min_order) }) }) : null);
+  }
+
+  let couponSec = null;
+  if (s.has_coupons) {
+    const code = h("input", { class: "input ltr", maxlength: "20", placeholder: t("كود الخصم"), "aria-label": t("كود الخصم"), style: { "text-transform": "uppercase" } });
+    const msg = h("span", { class: "hint" });
+    const btn = h("button", { class: "btn btn-soft", type: "button" }, t("تطبيق"));
+    btn.addEventListener("click", async () => {
+      if (st.coupon) { st.coupon = null; code.disabled = false; code.value = ""; btn.textContent = t("تطبيق"); msg.textContent = ""; return renderBill(); }
+      const v = oneLine(code.value, 20).toUpperCase();
+      if (v.length < 3) return toast(t("اكتب كود الخصم"), "error");
+      btn.disabled = true;
+      try {
+        const r = await rpc(sb, "apply_coupon", { p_store_id: s.id, p_code: v, p_subtotal: cartSubtotal() });
+        if (r.ok) {
+          st.coupon = r; code.disabled = true; btn.textContent = t("إزالة");
+          msg.textContent = t("✅ تم تطبيق الكود {c}", { c: r.code });
+        } else {
+          msg.textContent = r.error === "min_order" ? t("الكود يتطلب طلباً بقيمة {m} أو أكثر", { m: money(r.min_order) })
+            : r.error === "expired" ? t("انتهت صلاحية الكود") : r.error === "rate_limited" ? t("محاولات كثيرة، انتظر قليلاً") : t("الكود غير صحيح");
+        }
+      } catch { msg.textContent = t("تعذر التحقق من الكود، حاول مجدداً"); }
+      btn.disabled = false;
+      renderBill();
+    });
+    couponSec = sec(t("كود الخصم"), h("div", { class: "row" }, h("div", { class: "grow" }, code), btn), msg);
   }
 
   const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, t("إرسال الطلب عبر واتساب"));
@@ -826,6 +934,7 @@ function openCheckout() {
       typeSec, deliverySec,
       sec(t("بياناتك"), f.name.el, f.phone.el),
       paySec,
+      couponSec,
       sec(null, notes.el),
       sec(t("ملخص الفاتورة"), billBox),
     ],
@@ -839,8 +948,15 @@ function openCheckout() {
     if (!S.cart.length) return toast(t("السلة فارغة"), "error");
     const who = validateNamePhone(f);
     if (!who) return;
-    const dist = oneLine(district.input.value, 60);
+    const dist = zoneSel ? (zones[Number(zoneSel.value)]?.name || "") : oneLine(district.input.value, 60);
     const addr = oneLine(address.input.value, 160);
+    if (st.type === "delivery" && zoneSel && !dist) {
+      zoneSel.classList.add("invalid"); zoneSel.focus();
+      return toast(t("اختر الحي من القائمة"), "error");
+    }
+    if (st.type === "delivery" && minOrder && cartSubtotal() < minOrder) {
+      return toast(t("الحد الأدنى لطلبات التوصيل {m}", { m: money(minOrder) }), "error");
+    }
     if (st.type === "delivery" && !dist && !st.gps) {
       district.input.classList.add("invalid");
       district.input.focus();
@@ -849,14 +965,19 @@ function openCheckout() {
     saveCustomer({ name: who.name, phone: who.phone, district: dist, address: addr, order_type: st.type, pay: st.pay });
 
     const sub = cartSubtotal();
-    const fee = st.type === "delivery" ? num(s.delivery_fee) : 0;
+    const fee = deliveryFee();
+    const disc = discountOf(sub);
+    const coupon = disc ? st.coupon.code : null;
     const payLabel = { cash: "عند الاستلام (نقداً)", card: "عند الاستلام (شبكة / مدى)", transfer: "تحويل بنكي" }[st.pay];
     const note = multiLine(notes.input.value, 400);
-    const items = S.cart.map((l) => ({ n: l.name.slice(0, 60), s: l.size?.name || null, q: l.qty, t: lineUnit(l) * l.qty }));
+    const items = S.cart.map((l) => ({ id: l.pid, n: l.name.slice(0, 60), s: l.size?.name || null, q: l.qty, t: lineUnit(l) * l.qty }));
+    const total = Math.max(0, sub - disc) + fee;
+    const meta = { mode: "order", name: who.name, phone: who.phone, type: st.type, district: dist, address: addr, gps: st.gps,
+      pay: payLabel, note, coupon, discount: disc || null, fee };
 
-    const ok = await submitToWhatsApp(sendBtn, sub + fee, items, (no) => buildOrderMessage(no, {
-      ...who, type: st.type, district: dist, address: addr, gps: st.gps, note, sub, fee, payLabel,
-    }));
+    const ok = await submitToWhatsApp(sendBtn, total, items, (no) => buildOrderMessage(no, {
+      ...who, type: st.type, district: dist, address: addr, gps: st.gps, note, sub, fee, payLabel, coupon, discount: disc,
+    }), meta);
     if (ok) {
       ls.set(lastKey(), { at: Date.now(), lines: S.cart.map((l) => ({ ...l })) });
       S.cart = []; saveCart(); refreshCta(); sheet.close();
@@ -895,8 +1016,9 @@ function buildOrderMessage(no, d) {
   L.push(SEP);
   L.push("💳 *تفاصيل الفاتورة:*");
   L.push(`• المنتجات: ${moneyText(d.sub)}`);
+  if (d.discount) L.push(`• الخصم (${d.coupon}): -${moneyText(d.discount)}`);
   if (d.type === "delivery") L.push(`• التوصيل: ${d.fee ? moneyText(d.fee) : "مجاناً"}`);
-  L.push(`• الإجمالي: *${moneyText(d.sub + d.fee)}*`);
+  L.push(`• الإجمالي: *${moneyText(Math.max(0, d.sub - (d.discount || 0)) + d.fee)}*`);
   L.push(`• الدفع: ${d.payLabel}`);
   L.push(FRAME_BOTTOM);
   return L.join("\n");
@@ -922,10 +1044,10 @@ function bindCooldown(btn, label) {
   tick();
 }
 
-async function submitToWhatsApp(btn, total, items, build) {
+async function submitToWhatsApp(btn, total, items, build, meta = null) {
   const st = openState(S.store, now());
   if (!st.open) {
-    toast(st.manual ? t("المتجر مغلق حالياً") : t("مغلق الآن — يفتح الساعة {t}", { t: fmtTime12(st.opensAt) }), "error");
+    toast(closedText(st), "error");
     return false;
   }
   if (cooldownLeft() > 0) return false;
@@ -936,7 +1058,7 @@ async function submitToWhatsApp(btn, total, items, build) {
   let no;
   try {
     const r = await withTimeout(rpc(sb, "log_event", {
-      p_store_id: S.store.id, p_event_type: "order_click", p_order_total: Math.round(total * 100) / 100, p_items: items,
+      p_store_id: S.store.id, p_event_type: "order_click", p_order_total: Math.round(total * 100) / 100, p_items: items, p_meta: meta,
     }), 3500);
     if (r?.ok === false) {
       btn.disabled = false; btn.textContent = label;
@@ -1008,6 +1130,44 @@ const periodChoices = (name, set) => choices(name, [
   { value: "am", icon: "🌤️", label: t("صباحاً") }, { value: "pm", icon: "🌙", label: t("مساءً") }, { value: "any", icon: "🕒", label: t("أي وقت") },
 ], "any", set);
 
+/* ---------------- تقويم التوفر ---------------- */
+function monthLabel(y, m) {
+  return new Date(Date.UTC(y, m, 1)).toLocaleDateString(isEn() ? "en-GB" : "ar-u-ca-gregory-nu-latn", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+/** تقويم شهري: الأيام المحجوزة مشطوبة، والفترة المختارة مظللة */
+function availCalendar({ min, getBlocked, getRange, onPick }) {
+  const box = h("div", { class: "cal", role: "group", "aria-label": t("تقويم التوفر") });
+  let [y, m] = min.split("-").map(Number); m -= 1;
+  const draw = () => {
+    const blocked = new Set(getBlocked());
+    const [from, nights] = getRange();
+    const sel = new Set(Array.from({ length: from ? nights : 0 }, (_, i) => addDays(from, i)));
+    const first = new Date(Date.UTC(y, m, 1)).getUTCDay();
+    const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const cells = [];
+    for (let i = 0; i < first; i++) cells.push(h("span", { class: "cal-blank" }));
+    for (let d = 1; d <= days; d++) {
+      const ymd = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const past = ymd < min, busy = blocked.has(ymd);
+      const b = h("button", { type: "button", class: `cal-day${busy ? " busy" : ""}${sel.has(ymd) ? " sel" : ""}${sel.has(ymd) && busy ? " clash" : ""}`,
+        disabled: past || busy, "aria-label": `${ymd}${busy ? " — " + t("محجوز") : ""}`, "aria-pressed": sel.has(ymd) ? "true" : "false" }, String(d));
+      b.addEventListener("click", () => { onPick(ymd); draw(); });
+      cells.push(b);
+    }
+    const canPrev = `${y}-${String(m + 1).padStart(2, "0")}` > min.slice(0, 7);
+    fill(box,
+      h("div", { class: "cal-head" },
+        h("button", { type: "button", class: "rbtn", disabled: !canPrev, "aria-label": t("الشهر السابق"), onClick: () => { m -= 1; if (m < 0) { m = 11; y -= 1; } draw(); } }, isEn() ? "‹" : "›"),
+        h("b", { text: monthLabel(y, m) }),
+        h("button", { type: "button", class: "rbtn", "aria-label": t("الشهر التالي"), onClick: () => { m += 1; if (m > 11) { m = 0; y += 1; } draw(); } }, isEn() ? "›" : "‹")),
+      h("div", { class: "cal-grid cal-wd" }, [0, 1, 2, 3, 4, 5, 6].map((d) => h("span", { text: dayName(d).slice(0, isEn() ? 3 : 2) }))),
+      h("div", { class: "cal-grid" }, cells),
+      h("div", { class: "cal-legend" }, h("span", {}, h("i", { class: "lg sel" }), t("اختيارك")), h("span", {}, h("i", { class: "lg busy" }), t("محجوز"))));
+  };
+  draw();
+  return { el: box, draw };
+}
+
 /* ---------------- الحجز ---------------- */
 function openBooking(p) {
   const s = S.store;
@@ -1015,8 +1175,14 @@ function openBooking(p) {
   const today = tzParts(s.timezone, now()).ymd;
   const sel = itemSelect(p, { allowGeneral: false });
   const getItem = () => S.products.find((x) => x.id === sel.value) || p;
-  const date = h("input", { class: "input", type: "date", min: today, value: today });
+  const date = h("input", { class: "input", type: "date", min: today, value: today, hidden: true });
   let nights = 1;
+  const blockedOf = () => getItem()?.options_json?.blocked_dates || [];
+  const firstFree = () => { let d = today; const b = new Set(blockedOf()); for (let i = 0; i < 365 && b.has(d); i++) d = addDays(d, 1); return d; };
+  date.value = firstFree();
+  const clash = () => { const b = new Set(blockedOf()); return Array.from({ length: nights }, (_, i) => addDays(date.value, i)).some((d) => b.has(d)); };
+  const dateLbl = h("b", { class: "sel-date" });
+  const cal = availCalendar({ min: today, getBlocked: blockedOf, getRange: () => [date.value, nights], onPick: (d) => { date.value = d; update(); } });
   const f = nameAndPhone(c);
   const guests = textField(t("عدد الأشخاص (اختياري)"), { type: "number", inputmode: "numeric", min: "1", max: "500" });
   const notes = textField(t("ملاحظات (اختياري)"), { multiline: true, maxlength: "400" });
@@ -1029,13 +1195,15 @@ function openBooking(p) {
     unitLbl.textContent = t(unit === "ليلة" ? "عدد الليالي" : unit === "يوم" ? "عدد الأيام" : unit === "ساعة" ? "عدد الساعات" : "عدد الوحدات");
     const price = num(it?.price);
     const out = date.value ? addDays(date.value, nights) : "";
+    dateLbl.textContent = date.value ? fmtDateAr(date.value) : "";
+    cal.draw();
     fill(billBox, bill([
       [t("السعر / {u}", { u: t(unit) }), money(price)],
       date.value && (unit === "ليلة" || unit === "يوم") ? [t("تاريخ الخروج"), fmtDateAr(out)] : null,
       [t("الإجمالي"), money(price * nights), true],
-    ]));
+    ]), clash() ? h("div", { class: "min-warn", text: t("بعض الأيام المختارة محجوزة، اختر تاريخاً آخر") }) : null);
   }
-  sel.addEventListener("change", update);
+  sel.addEventListener("change", () => { date.value = firstFree(); update(); });
   date.addEventListener("change", update);
 
   const sendBtn = h("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, t("إرسال طلب الحجز عبر واتساب"));
@@ -1045,7 +1213,7 @@ function openBooking(p) {
     body: [
       sec(t("تفاصيل الحجز"),
         h("label", { class: "field" }, h("span", { text: t("الوحدة") }), sel),
-        h("label", { class: "field" }, h("span", { text: t("تاريخ الدخول") }), date),
+        h("div", { class: "field" }, h("span", { class: "label" }, t("تاريخ الدخول"), " ", dateLbl), date, cal.el),
         h("div", { class: "row between" }, unitLbl, stepper(1, (v) => { nights = Math.min(60, v); update(); }, true))),
       sec(t("بياناتك"), f.name.el, f.phone.el, guests.el, notes.el),
       sec(t("ملخص الحجز"), billBox),
@@ -1059,6 +1227,7 @@ function openBooking(p) {
     const it = getItem();
     if (!it) return toast(t("اختر الوحدة"), "error");
     if (!date.value || date.value < today) { date.classList.add("invalid"); return toast(t("اختر تاريخ دخول صحيح"), "error"); }
+    if (clash()) return toast(t("بعض الأيام المختارة محجوزة، اختر تاريخاً آخر"), "error");
     const who = validateNamePhone(f);
     if (!who) return;
     saveCustomer({ name: who.name, phone: who.phone });
@@ -1066,7 +1235,8 @@ function openBooking(p) {
     const total = num(it.price) * nights;
     const g = Math.floor(num(guests.input.value));
     const note = multiLine(notes.input.value, 400);
-    const ok = await submitToWhatsApp(sendBtn, total, [{ n: it.name.slice(0, 60), q: nights, t: total }], (no) => {
+    const meta = { mode: "booking", name: who.name, phone: who.phone, date: `${date.value} +${nights} ${unit}`, note };
+    const ok = await submitToWhatsApp(sendBtn, total, [{ id: it.id, n: it.name.slice(0, 60), q: nights, t: total }], (no) => {
       const L = [frameTop("إشعار طلب حجز 📅"), `رقم الطلب: *#BK-${no}*`, `🏪 ${s.name}`, "",
         "🔷 *تفاصيل الحجز:*", `• الوحدة: ${it.name}`, `• تاريخ الدخول: ${fmtDateMsg(date.value)}`, `• المدة: ${nights} ${unit}`];
       if (unit === "ليلة" || unit === "يوم") L.push(`• تاريخ الخروج: ${fmtDateMsg(addDays(date.value, nights))}`);
@@ -1075,7 +1245,7 @@ function openBooking(p) {
       if (note) L.push(`📝 ملاحظات: ${note}`);
       L.push(SEP, "💳 *تفاصيل الفاتورة:*", `• السعر / ${unit}: ${moneyText(it.price)}`, `• الإجمالي: *${moneyText(total)}*`, FRAME_BOTTOM);
       return L.join("\n");
-    });
+    }, meta);
     if (ok) sheet.close();
   });
 }
@@ -1117,6 +1287,7 @@ function openInquiry(p) {
     const kindLabel = { visit: "معاينة على الطبيعة", ask: "استفسار", hold: "حجز مبدئي" }[kind];
     const periodLabel = { am: "صباحاً", pm: "مساءً", any: "أي وقت" }[period];
     const note = multiLine(notes.input.value, 500);
+    const meta = { mode: "inquiry", name: who.name, phone: who.phone, kind: kindLabel, date: `${date.value || ""} ${periodLabel}`.trim(), note };
     const ok = await submitToWhatsApp(sendBtn, it ? num(it.price) : 0, it ? [{ n: it.name.slice(0, 60), q: 1, t: num(it.price) }] : [], (no) => {
       const L = [frameTop(`إشعار طلب ${kindLabel} 🏢`), `رقم الطلب: *#RQ-${no}*`, `🏪 ${s.name}`, "", "🔷 *العرض:*"];
       if (it) {
@@ -1129,7 +1300,7 @@ function openInquiry(p) {
       if (note) L.push(`📝 تفاصيل: ${note}`);
       L.push(FRAME_BOTTOM);
       return L.join("\n");
-    });
+    }, meta);
     if (ok) sheet.close();
   });
 }
@@ -1193,13 +1364,14 @@ function openDonation(p) {
     const ph = toLatinDigits(phone.input.value).replace(/[^\d+]/g, "");
     saveCustomer({ phone: ph, ...(name !== "فاعل خير" ? { name } : {}) });
     const it = S.products.find((x) => x.id === sel.value);
+    const meta = { mode: "charity", name, phone: ph, kind: it?.name || "تبرع عام", pay: "تحويل بنكي" };
     const ok = await submitToWhatsApp(sendBtn, value, [{ n: (it?.name || "تبرع عام").slice(0, 60), q: 1, t: value }], (no) => [
       frameTop("إشعار تبرع 💚"), `رقم الإشعار: *#DN-${no}*`, `🏛️ ${s.name}`, "",
       "🔷 *التبرع:*", `• المبادرة: ${it?.name || "تبرع عام"}`, `• المبلغ: *${moneyText(value)}*`,
       `• الدفع: ${s.iban_number ? `تحويل بنكي إلى ${s.iban_number}` : "تحويل بنكي"}`, "",
       `👤 المتبرع: ${name}`, `📞 الجوال: ${ph}`, SEP,
       "📎 سأرفق صورة إيصال التحويل في هذه المحادثة.", "جزاكم الله خيراً 🤲", FRAME_BOTTOM,
-    ].join("\n"));
+    ].join("\n"), meta);
     if (ok) sheet.close();
   });
 }
@@ -1246,6 +1418,7 @@ function openLegal(p) {
     const kindLabel = { office: "حضورية", remote: "عن بُعد", contract: "صياغة عقد" }[kind];
     const periodLabel = { am: "صباحاً", pm: "مساءً", any: "أي وقت" }[period];
     const fee = it ? num(it.price) : 0;
+    const meta = { mode: "legal", name: who.name, phone: who.phone, kind: `${it?.name || "غير محدد"} — ${kindLabel}`, date: `${date.value || ""} ${periodLabel}`.trim(), note: b };
     const ok = await submitToWhatsApp(sendBtn, fee, it ? [{ n: it.name.slice(0, 60), q: 1, t: fee }] : [], (no) => {
       const L = [frameTop("إشعار طلب استشارة ⚖️"), `رقم الطلب: *#LG-${no}*`, `🏛️ ${s.name}`, "",
         "🔷 *الاستشارة:*", `• التخصص: ${it?.name || "غير محدد"}`, `• النوع: ${kindLabel}`,
@@ -1254,7 +1427,7 @@ function openLegal(p) {
       if (fee > 0) L.push(SEP, "💳 *تفاصيل الفاتورة:*", `• رسوم الاستشارة: *${moneyText(fee)}*`);
       L.push(FRAME_BOTTOM);
       return L.join("\n");
-    });
+    }, meta);
     if (ok) sheet.close();
   });
 }

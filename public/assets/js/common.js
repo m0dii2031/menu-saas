@@ -288,16 +288,58 @@ export function tzParts(tz, date = new Date()) {
 const toMin = (t) => { const [hh, mm] = String(t).split(":").map(Number); return hh * 60 + (mm || 0); };
 
 /** يدعم الدوام الممتد بعد منتصف الليل (مثل 4:00م → 2:00ص) */
+export const WEEKDAYS_AR = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+export const WEEKDAYS_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export const dayName = (d) => (I18N.lang === "en" ? WEEKDAYS_EN : WEEKDAYS_AR)[d];
+
+/** يوم الأسبوع (0 = الأحد) بتوقيت المتجر */
+export function tzWeekday(tz, date = new Date()) {
+  const p = tzParts(tz, date);
+  return new Date(Date.UTC(+p.y, +p.mo - 1, +p.d)).getUTCDay();
+}
+
+/** الفترات الفعّالة لكل يوم: hours_json إن وُجد، وإلا وقت الفتح/الإغلاق العام لكل الأيام */
+export function weekSchedule(s) {
+  if (s?.hours_json && typeof s.hours_json === "object") {
+    return [0, 1, 2, 3, 4, 5, 6].map((d) => (Array.isArray(s.hours_json[d]) ? s.hours_json[d] : []));
+  }
+  if (!s?.open_time || !s?.close_time || s.open_time === s.close_time) return null; // 24 ساعة
+  return [0, 1, 2, 3, 4, 5, 6].map(() => [{ o: s.open_time, c: s.close_time }]);
+}
+
+/**
+ * حالة الفتح مع دعم: فترتين باليوم، الدوام بعد منتصف الليل، الإغلاق الطارئ،
+ * ومتى يفتح القادم (اليوم أو يوم آخر).
+ */
 export function openState(s, now = new Date()) {
   if (!s) return { open: false };
   if (!s.is_open) return { open: false, manual: true };
-  if (!s.open_time || !s.close_time) return { open: true, allDay: true };
+  const week = weekSchedule(s);
+  if (!week) return { open: true, allDay: true };
   const p = tzParts(s.timezone, now);
   const cur = p.hour * 60 + p.minute;
-  const o = toMin(s.open_time), c = toMin(s.close_time);
-  if (o === c) return { open: true, allDay: true };
-  const open = o < c ? cur >= o && cur < c : cur >= o || cur < c;
-  return { open, opensAt: s.open_time, closesAt: s.close_time };
+  const today = tzWeekday(s.timezone, now);
+  const yday = (today + 6) % 7;
+  for (const sh of week[today]) {
+    const o = toMin(sh.o), c = toMin(sh.c);
+    if (o === c) return { open: true, allDay: true };
+    if (o < c ? cur >= o && cur < c : cur >= o) return { open: true, closesAt: sh.c };
+  }
+  for (const sh of week[yday]) {
+    const o = toMin(sh.o), c = toMin(sh.c);
+    if (o > c && cur < c) return { open: true, closesAt: sh.c };
+  }
+  // متى نفتح؟
+  const later = week[today].map((sh) => sh.o).filter((o) => toMin(o) > cur).sort()[0];
+  if (later) return { open: false, opensAt: later, opensDay: null };
+  for (let i = 1; i <= 7; i++) {
+    const d = (today + i) % 7;
+    if (week[d].length) {
+      const first = week[d].map((sh) => sh.o).sort()[0];
+      return { open: false, opensAt: first, opensDay: i === 1 ? "tomorrow" : d };
+    }
+  }
+  return { open: false, closedAll: true };
 }
 
 export function fmtTime12(t) {

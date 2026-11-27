@@ -5,3 +5,6 @@ grant usage on schema auth to anon, authenticated, service_role; grant execute o
 grant usage on schema public, extensions to anon, authenticated, service_role;
 create table storage.buckets (id text primary key, name text, public bool, file_size_limit bigint, allowed_mime_types text[]);
 create publication supabase_realtime;
+create or replace function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('test.jwt', true), ''), '{}')::jsonb $$;
+grant execute on function auth.jwt() to public;
+create table if not exists auth.mfa_factors (id uuid primary key default gen_random_uuid(), user_id uuid not null, status text not null);
