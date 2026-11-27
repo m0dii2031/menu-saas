@@ -41,7 +41,8 @@ run_sql() {  # $1 = ملف SQL، $2 = عدد المحاولات (افتراضي 
 echo "::group::1) المشروع"
 REF=$(api GET /projects | jq -r --arg n "$NAME" '[.[] | select(.name == $n)][0].id // empty')
 if [ -z "$REF" ]; then
-  ORG=$(api GET /organizations | jq -r '.[0].id // .[0].slug // empty')
+  ORGS=$(api GET /organizations)
+  ORG=$(echo "$ORGS" | jq -r --arg n "$NAME" '([.[] | select(.name == $n)][0] // .[0]) | (.id // .slug // empty)')
   [ -n "$ORG" ] || { echo "::error::لا توجد منظمة في حساب Supabase — أنشئ واحدة من supabase.com/dashboard/new"; exit 1; }
   DBPASS=$(openssl rand -base64 30 | tr -dc 'A-Za-z0-9' | head -c 32); mask "$DBPASS"
   body=$(mktemp)
@@ -89,7 +90,7 @@ echo "::endgroup::"
 
 echo "::group::5) الدوال"
 for fn in sign-upload vision-menu manifest cleanup-media; do
-  supabase functions deploy "$fn" --project-ref "$REF" --no-verify-jwt --use-api
+  supabase functions deploy "$fn" --project-ref "$REF" --no-verify-jwt --use-api --yes
 done
 echo "::endgroup::"
 
